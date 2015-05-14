@@ -1,7 +1,8 @@
 #!/bin/bash
 path="$(dirname "$(realpath "$0")")";
 username=$1
-cd path
+cd $path
+echo $path
 echo "Trying to compile 'nibolo' "
 sudo -u $username nim c -d:ssl -d:release $path/src/nibolo.nim
 
@@ -15,7 +16,7 @@ cp $path/README.md /usr/local/share/doc/nibolo/README.md
 cp $path/ChangeLog /usr/local/share/doc/nibolo/ChangeLog
 
 echo "Cleaning..."
-rm -r ./src/nimcache
-rm ./src/nibolo
+rm -r $path/src/nimcache
+rm $path/src/nibolo
 
 echo "All done~"
