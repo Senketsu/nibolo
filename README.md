@@ -20,13 +20,9 @@ Had to satisfy my need for more oshino images.
 * The *profiles.ini* contains some explanation how to add more boorus
 * Its very simple and most boorus have pretty much same patter.
 * I don't know many boorus so the default list is pretty slim.
-* If you want booru added to defaults (or you can't manage to include some yourself) contact me on [twitter](https://twitter.com/Senketsu_Dev)
-*  (also contact me if you know some highly populated booru)
-*  (gotta fetch em all)
 * I will extend the list in next update and add updater for that as well
 * Sankaku Complex (IDOL) doesn't work (CHAN) Partially works
 *   Reason is the response html is very shitty and parser breaks on it
-*   **ssl** is only needed for sankaku, read below
 
 
 ## Install:
@@ -43,7 +39,7 @@ Had to satisfy my need for more oshino images.
 * The username is needed for compiling without root privilage while installing does need it
 
 ### Windows
-* Get gtk2 runtime libraries [Windows 32bit](http://www.gtk.org/download/) or [Windows 64bit](http://lvserver.ugent.be/gtk-win64/gtk2-runtime/gtk2-runtime-2.24.25-2015-01-21-ts-win64.e
+* Get gtk2 runtime libraries [Windows 32bit](http://downloads.sourceforge.net/gtk-win/gtk2-runtime-2.24.10-2012-10-10-ash.exe?download) or [Windows 64bit](http://lvserver.ugent.be/gtk-win64/gtk2-runtime/gtk2-runtime-2.24.25-2015-01-21-ts-win64.exe)
 * Download **Nibolo** from the [release](https://github.com/Senketsu/nibolo/releases) page
 * Enjoy !
 
