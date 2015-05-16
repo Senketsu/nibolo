@@ -42,6 +42,7 @@ Had to satisfy my need for more oshino images.
 * Get gtk2 runtime libraries [Windows 32bit](http://downloads.sourceforge.net/gtk-win/gtk2-runtime-2.24.10-2012-10-10-ash.exe?download) or [Windows 64bit](http://lvserver.ugent.be/gtk-win64/gtk2-runtime/gtk2-runtime-2.24.25-2015-01-21-ts-win64.exe)
 * Download **Nibolo** from the [release](https://github.com/Senketsu/nibolo/releases) page
 * Enjoy !
+**Important note: If you have the option, grab the 64bit version of gtk & nibolo,gtk lib for 32bit is bit older and preview wont be working.**
 
 ### Contact
 * Feedback , thoughts , bug reports ?
