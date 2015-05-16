@@ -1,3 +1,10 @@
+*** 2015-05-09 Senketsu <Senketsu@cock.li> Nibolo version 0.1.1
+* Add: View mode (step trough images of your search and pick which to save)
+* Add: Update check
+* Add: Self update (*nix)
+* Fix: Gui resizing and positioning of elements
+* Fix: slight changes in install.sh , should clean up properly
+*
 *** 2015-05-09 Senketsu <Senketsu@cock.li> Nibolo version 0.1a
 *
 * First draft

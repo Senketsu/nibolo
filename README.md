@@ -1,6 +1,6 @@
 # **nibolo - Nim Booru Loader**
-## Current version 0.1a
-###
+## Current version 0.1.1
+### Gotta view 'em all
 ------------------------
 ### About nibolo
 A little afternoon project while waiting for a bug fix on Nim
@@ -11,7 +11,9 @@ Had to satisfy my need for more oshino images.
 ------------------------
 * Download images from boorus
 * Download images from chans
-* Who the hell knows ? Its first draft.
+* View Mode - Preview images and choose which to download
+* Update Check
+* Self updater (*nix)
 
 ### Notes:
 ------------------------
@@ -21,6 +23,7 @@ Had to satisfy my need for more oshino images.
 * If you want booru added to defaults (or you can't manage to include some yourself) contact me on [twitter](https://twitter.com/Senketsu_Dev)
 *  (also contact me if you know some highly populated booru)
 *  (gotta fetch em all)
+* I will extend the list in next update and add updater for that as well
 * Sankaku Complex (IDOL) doesn't work (CHAN) Partially works
 *   Reason is the response html is very shitty and parser breaks on it
 *   **ssl** is only needed for sankaku, read below
@@ -30,8 +33,9 @@ Had to satisfy my need for more oshino images.
 ------------------------
 **Requirements**
 * gtk2 wrapper (nimble install gtk2)
-* gtk2 runtime libraries (use your package manager to find one or for [windows](http://www.gtk.org/download/)
-* **optional** openssl (leave out the compiler define -d:ssl)
+* gtk2 runtime libraries (use your package manager or for [Windows 32bit](http://downloads.sourceforge.net/gtk-win/gtk2-runtime-2.24.10-2012-10-10-ash.exe?download) or [Windows 64bit](http://lvserver.ugent.be/gtk-win64/gtk2-runtime/gtk2-runtime-2.24.25-2015-01-21-ts-win64.exe)
+* openssl
+**(Windows installation is shipped with openssl dll's)**
 
 ### Linux
 * Run install.sh with 'sudo' and pass 'username' as param
@@ -39,12 +43,9 @@ Had to satisfy my need for more oshino images.
 * The username is needed for compiling without root privilage while installing does need it
 
 ### Windows
-* 1st: Compile with 'nim c -d:ssl -d:release ./src/nibolo.nim'
-*  (NOTE: again ssl is optional and is only required for Sankaku which is broken)
-* 2nd: Get the gtk2 lib from link above (if you don't have yet)
-* 3rd: Unpack somewhere and add it to your env variable PATH
-*  **OR** Unpack it to folder with nibolo.exe
-* Make shortcut on desktop duh.. i will provide installers later
+* Get gtk2 runtime libraries [Windows 32bit](http://www.gtk.org/download/) or [Windows 64bit](http://lvserver.ugent.be/gtk-win64/gtk2-runtime/gtk2-runtime-2.24.25-2015-01-21-ts-win64.e
+* Download **Nibolo** from the [release](https://github.com/Senketsu/nibolo/releases) page
+* Enjoy !
 
 ### Contact
 * Feedback , thoughts , bug reports ?

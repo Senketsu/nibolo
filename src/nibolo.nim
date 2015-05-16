@@ -1,10 +1,12 @@
-import os, strutils, streams, strtabs, httpclient , parsexml , parsecfg , browsers
+import os, strutils, streams, httpclient , parsexml , parsecfg , browsers
 import gtk2 , gdk2pixbuf , glib2  , dialogs
-from math import random
 
-const VERSION = "v0.1a"
+const
+ VERSION = "v0.1.1"
 
 type
+ TSplitPath = tuple
+  dir,name,ext: string
  TLinkData* = tuple
   url,ext,name: string
  TBooruProf* = tuple
@@ -18,10 +20,15 @@ var
  imMain: PPixbuf
  cbProf: PComboBoxText
  sbProgress,sbInfo: PStatusbar
+ vmToggle: PToggleButton
+ cbFolder,bStart: PButton
  actProfile: PBooruProf
- dirCfg,dirSaveTo: string = ""
- stopME: bool = false
- fpResponse,fpProfiles,fpPicMain: string = ""
+ dirCfg,dirSaveTo,dirTemp: string = ""
+ stopME,restartME,viewMode: bool = false
+ waitChoice = true
+ profCount: int = 0
+ pwW,pwH: gint = 0
+ fpResponse,fpProfiles,fpPicMain,fpViewMode: string = ""
 
 new actProfile
 
@@ -29,6 +36,10 @@ proc isNumber* (s: string): bool =
  var i = 0
  while s[i] in {'0'..'9'}: inc(i)
  result = i == s.len and s.len > 0
+
+proc isNumber* (c: char): bool =
+ if c in {'0'..'9'}:
+  result = true
 
 proc destroy(widget: PWidget, data: Pgpointer) {.cdecl.} =
  stopME = true
@@ -38,26 +49,19 @@ proc destroy(widget: PWidget, data: Pgpointer) {.cdecl.} =
 
 proc chooseFolder(widget: PWidget, data: Pgpointer) =
  var
-  fullPath: cstring = ""
-  folderName: string = ""
-  fcDialog: PDialog
+  getPath,folderName: string = ""
 
- fcDialog = file_chooser_dialog_new ("Select Folder", mainWin,
-  FILE_CHOOSER_ACTION_SELECT_FOLDER , STOCK_CANCEL, RESPONSE_CANCEL,
-  STOCK_APPLY, RESPONSE_ACCEPT, nil)
-
- if run(fcDialog) == RESPONSE_ACCEPT:
-  fullPath = get_filename(FILE_CHOOSER(fcDialog))
-  folderName = $fullPath
-  folderName.delete(0,rfind(folderName,'/'))
-  set_label(PButton(widget),folderName)
-  set_tooltip_text(widget,fullPath)
-  dirSaveTo = $fullPath
-  destroy(fcDialog)
-  while gtk2.events_pending () > 0:
-   discard gtk2.main_iteration()
- else:
-  destroy(fcDialog)
+ getPath = mainWin.chooseDir()
+ if getPath != "":
+  folderName = getPath
+  echo getPath
+  when defined(Windows):
+   folderName.delete(0,rfind(folderName, '\\'))
+  else:
+   folderName.delete(0,rfind(folderName, '/'))
+  set_label(cbFolder,folderName)
+  set_tooltip_text(cbFolder,getPath)
+  dirSaveTo = getPath
 
 proc protoDownload(curProf: PBooruProf,folder: string, data: TLinkData): bool =
  var
@@ -66,7 +70,7 @@ proc protoDownload(curProf: PBooruProf,folder: string, data: TLinkData): bool =
   sExt,sName,buff: string = ""
   imPreview: PPixbuf
   splitLink: seq[string]
-
+ viewMode = get_active(vmToggle)
  # Seems like simplest solution for now
  if curProf.repStr[0][0] != "":
   buff = data.url
@@ -106,9 +110,12 @@ proc protoDownload(curProf: PBooruProf,folder: string, data: TLinkData): bool =
 
  # Generate filename/path, if exists, skip (assuming names are unique [for now])
  fileName = "$1[$2]$3" % [curProf.name ,sName ,sExt]
- filePath = joinPath(folder,fileName)
- if fileExists(filePath):
-  return
+ if viewMode:
+  filePath = joinPath(dirTemp,fileName)
+ else:
+  filePath = joinPath(folder,fileName)
+  if fileExists(filePath):
+   return
 
  # Request header for generated link, if file is not found, change ext and try again
  var
@@ -126,8 +133,15 @@ proc protoDownload(curProf: PBooruProf,folder: string, data: TLinkData): bool =
   echo "Downloading: $1" % [dlLink]
   try:
    downloadFile(dlLink ,filePath)
-   imPreview = pixbuf_new_from_file_at_size(filePath, 400,350,nil)
+   imPreview = pixbuf_new_from_file_at_size(filePath, pwW,pwH,nil)
    set_from_pixbuf(PImage(pwMain),imPreview)
+   if viewMode:
+    waitChoice = true
+    fpViewMode = filePath
+    while waitChoice:
+     discard gtk2.main_iteration()
+    waitChoice = true
+    removeFile(filePath)
    result = true
   except: # failed dl, delete file
    removeFile(filePath)
@@ -148,12 +162,22 @@ proc protoDownload(curProf: PBooruProf,folder: string, data: TLinkData): bool =
    if httpCode.startsWith("200"):
     try:
      fileName = "$1[$2]$3" % [curProf.name ,sName ,sExt]
-     filePath = joinPath(folder,fileName)
-     if fileExists(filePath):
-      return
+     if viewMode:
+      filePath = joinPath(dirTemp,fileName)
+     else:
+      filePath = joinPath(folder,fileName)
+      if fileExists(filePath):
+       return
      downloadFile(dlLink ,filePath)
-     imPreview = pixbuf_new_from_file_at_size(filePath, 400,350,nil)
+     imPreview = pixbuf_new_from_file_at_size(filePath, pwW,pwH,nil)
      set_from_pixbuf(PImage(pwMain),imPreview)
+     if viewMode:
+      waitChoice = true
+      fpViewMode = filePath
+      while waitChoice:
+       discard gtk2.main_iteration()
+      waitChoice = true
+      removeFile(filePath)
      result = true
      echo "*** Success"
     except: # Shouldn't happen .. i hope ..
@@ -285,7 +309,7 @@ proc protoSearch(searchTag, saveFolder: string, curProf: PBooruProf) =
         linkData.ext = ""
         linkData.name = ""
         break
-      # Sometimes parser breaks (e.g: sankaku complex
+      # Sometimes parser breaks (e.g: sankaku complex)
       of xmlEof:
        break
       # We need only key-value pairs
@@ -520,10 +544,22 @@ proc loadProfile*(profName: string,curProf: PBooruProf): bool =
  result = foundProfile
 
 proc setCfgPath() =
- dirCfg = joinPath(getHomeDir(), ".config/Nibolo")
+
+ dirCfg = joinPath(getConfigDir(), "nibolo")
+ dirTemp = joinPath(getTempDir(), "nibolo")
  fpResponse = joinPath(dirCfg,"response.html")
  fpProfiles = joinPath(dirCfg,"profiles.ini")
- fpPicMain = joinPath(dirCfg,"nibolo.png")
+ when defined(Linux):
+  fpPicMain = "/usr/local/share/pixmaps/nibolo.png"
+ elif defined(Windows):
+  fpPicMain =joinPath(getAppDir(),"nibolo.png")
+ else:
+  fpPicMain = joinPath(dirCfg,"nibolo.png")
+ if existsDir(dirTemp) == false:
+  try:
+   createDir(dirTemp)
+  except:
+   dirTemp = getTempDir()
  if existsDir(dirCfg) == false:
   try:
    createDir(dirCfg)
@@ -532,15 +568,14 @@ proc setCfgPath() =
    mainWin.error("***Error: Failed to create directory $1" % [dirCfg])
  if existsFile(fpProfiles) == false:
    createDefaultProfiles()
- # Fuck off , this is special case for me, cuz mama said im special
- # I need to look at muh shinobu while i 'code'
- if existsFile(fpPicMain) == false:
-  fpPicMain = "/home/senketsu/Coding/Nim/Projects/nibolo/WiP/data/nibolo.png"
-
 
 proc fillProfileComboBox() =
  var
   fileStream = newFileStream(fpProfiles, fmRead)
+  index: int = 0
+
+ for i in countUp(0,profCount):
+  cbProf.remove(gint(0))
 
  if fileStream != nil:
   var cfgParser: CfgParser
@@ -552,11 +587,13 @@ proc fillProfileComboBox() =
     of cfgEof:
       break
     of cfgSectionStart:
-     cbProf.append_text(event.section)
+     cbProf.insert_text(gint(index),event.section)
+     inc(index)
     of cfgError:
      mainWin.error(event.msg)
     else: discard
   close(cfgParser)
+  profCount = index
 
 proc startGrab(widget: PWidget, data: Pgpointer)=
  var
@@ -577,11 +614,11 @@ proc startGrab(widget: PWidget, data: Pgpointer)=
  if loadProfile(selProfile,actProfile) == false:
   return
 
- set_relief(PButton(widget),RELIEF_NONE)
+ set_relief(bStart,RELIEF_NONE)
  protoSearch(entryString,dirSaveTo,actProfile)
  stopMe = false
  removeFile(fpResponse)
- set_relief(PButton(widget),RELIEF_HALF)
+ set_relief(bStart,RELIEF_HALF)
  discard push(sbInfo, 1, "Status: Idle...")
  set_from_pixbuf(PImage(pwMain),imMain)
 
@@ -589,133 +626,402 @@ proc startGrab(widget: PWidget, data: Pgpointer)=
 proc stopGrab(widget: PWidget, data: Pgpointer) =
  stopMe = true
 
-proc editProfiles(widget: PWidget, data: Pgpointer) =
- openDefaultBrowser(fpProfiles)
+proc yesOrNo(question: string): bool =
+ var
+  ynDialog: PDialog
+  labDummy: PLabel = label_new(question)
 
-proc update(widget: PWidget, data: Pgpointer) =
- let i = random(11)
- case i
- of 0,3,6:
-  mainWin.info("NOT YET !")
- of 1,7,9:
-  mainWin.info("I SIAD, NTO FUCKIGN YET! $@#$*&*")
- of 2,4:
-  mainWin.info("It will be soon..BUT NOT YET")
- of 5,8,10:
-  mainWin.error("Fuck you !")
-  main_quit()
+ ynDialog = dialog_new_with_buttons (question, mainWin,
+  DIALOG_DESTROY_WITH_PARENT , STOCK_NO, RESPONSE_NO,
+  STOCK_YES, RESPONSE_YES,nil)
+
+ pack_start(ynDialog.vbox, labDummy, true, true, 30)
+ ynDialog.show_all()
+
+ if run(ynDialog) == RESPONSE_YES:
+  result = true
+  destroy(ynDialog)
+ else:
+  destroy(ynDialog)
+
+proc resetProfiles(widget: PWidget, data: Pgpointer) =
+ if yesOrNo("Do you want to reset your profiles.ini ?"):
+  createDefaultProfiles()
+  fillProfileComboBox()
  else:
   discard
 
-proc startUp () =
+proc editProfiles(widget: PWidget, data: Pgpointer) =
+ openDefaultBrowser(fpProfiles)
 
+proc updateProfilesList() =
+ fillProfileComboBox()
+
+proc parseInt(c: char): int =
+ if c in {'0'..'9'}:
+  result = int(c) - int('0')
+
+proc getNextVersion(curVer: string): string =
  var
-  hbMain,vbMain,vbSec,hbFill,fcDialog: PWidget
-  cbFolder,bStart,bStop,bQuit,bUpdate,bProFile: PButton
+  vM,vS,vT: int = 0
+
+ vM = parseInt(curVer[1])
+ vS = parseInt(curVer[3])
+ vT = parseInt(curVer[5])
+
+ inc(vT)
+ if vT > 9:
+  vT = 0
+  inc(vS)
+  if vS > 9:
+   vS = 0
+   inc(vM)
+
+ result = "v$1.$2.$3" % [$vM,$vS,$vT]
+
+proc isNewVersion(version: string): bool =
+ var
+  respGet: Response
+  httpCode,nextVer: string = ""
+  gitUrl: string = "https://github.com/Senketsu/nibolo/releases/tag/"
+
+ nextVer = getNextVersion(version)
+ try:
+  respGet = request( gitUrl & nextVer, httpHead)
+  httpCode = respGet.status
+ except:
+  discard
+
+ if httpCode.startsWith("200"):
+  result = true
+
+proc promptEntry(question: string): string =
+ var
+  ynDialog: PDialog
+  labDummy: PLabel = label_new(question)
+  labDummy2: PLabel = label_new("*(This will write your password to stdin !!!)*")
+  entry: PEntry = entry_new()
+
+ entry.set_visibility(false);
+
+ ynDialog = dialog_new_with_buttons (question, mainWin,
+  DIALOG_DESTROY_WITH_PARENT , STOCK_NO, RESPONSE_NO,
+  STOCK_YES, RESPONSE_YES,nil)
+
+ pack_start(ynDialog.vbox, labDummy, true, true, 15)
+ pack_start(ynDialog.vbox, labDummy2, true, true, 15)
+ pack_start(ynDialog.vbox, entry, false, false, 5)
+ ynDialog.show_all()
+
+ if run(ynDialog) == RESPONSE_YES:
+  result = $get_text(entry)
+  destroy(ynDialog)
+ else:
+  result = ""
+  destroy(ynDialog)
+ while gtk2.events_pending () > 0:
+  discard gtk2.main_iteration()
+
+proc promptCombo(question: string): string =
+ var
+  ynDialog: PDialog
+  labDummy: PLabel = label_new(question)
+  cbVer: PComboBoxText
+
+ cbVer = combo_box_text_new()
+ set_tooltip_text(cbVer,"Pick version to download, if not sure,pick ´x86´ (32bit)")
+ cbVer.insert_text(gint(0),"x86")
+ cbVer.insert_text(gint(1),"x86_64")
+
+ ynDialog = dialog_new_with_buttons (question, mainWin,
+  DIALOG_DESTROY_WITH_PARENT , STOCK_NO, RESPONSE_NO,
+  STOCK_YES, RESPONSE_YES,nil)
+
+ pack_start(ynDialog.vbox, labDummy, true, true, 15)
+ pack_start(ynDialog.vbox, cbVer, false, false, 5)
+ ynDialog.show_all()
+
+ if run(ynDialog) == RESPONSE_YES:
+  result = $get_active_text(cbVer)
+  destroy(ynDialog)
+ else:
+  result = ""
+  destroy(ynDialog)
+ while gtk2.events_pending () > 0:
+  discard gtk2.main_iteration()
+
+proc updateWin() =
+ var
+  nextVer = getNextVersion(VERSION)
+  fpNewVer:string = ""
+  dlUrl = "https://github.com/Senketsu/nibolo/releases/download/$1/" % [ nextVer]
+
+ let arch = promptCombo("Pick version to download, if not sure,pick ´x86´ (32bit)")
+ if arch != "":
+  let dlPath = mainWin.chooseDir()
+  if dlPath == "":
+   mainWin.info("Downloading canceled.")
+   return
+  let dlName = "nibolo_setup_$1_$2.exe" % [nextVer,arch]
+  fpNewVer = joinPath(dlPath,dlName)
+  dlUrl = joinPath(dlUrl,dlName)
+  echo dlUrl
+  echo fpNewVer
+  try:
+   downloadFile( dlUrl ,fpNewVer)
+  except:
+   mainWin.error("Opps, failed to download Nibolo")
+   return
+ else:
+  mainWin.info("Downloading canceled.")
+  return
+
+ mainWin.info("New installer downloaded")
+
+
+proc updateNix() =
+ var
+  nextVer = getNextVersion(VERSION)
+  fpMasterUrl = "https://github.com/Senketsu/nibolo/archive/"
+  fpNewVer = joinPath(dirCfg,"Nibolo_$1.zip" % [nextVer])
+  homeDir: string = getHomeDir()
+  userName: string = ""
+  rv: int
+
+ homeDir.delete(homeDir.len,homeDir.len)
+ userName = homeDir
+ userName.delete(0,rfind(userName,'/'))
+
+ while gtk2.events_pending () > 0:
+  discard gtk2.main_iteration()
+
+ try:
+  downloadFile(fpMasterUrl & "$1.zip" % [nextVer] ,fpNewVer)
+ except:
+  mainWin.error("Opps, failed downloading Nibolo")
+
+ rv = execShellCmd("unzip -o $1 -d $2" % [ fpNewVer, dirCfg ])
+ echo ($rv)
+ if rv == 0:
+  let pass = promptEntry("Enter sudo password for installation")
+  if pass == "":
+   mainWin.info("Installation canceled.")
+   removeDir(joinPath(dirCfg,"nibolo-master"))
+   return
+  else:
+   rv = execShellCmd(" echo $1 | sudo -S $2 $3" % [pass,joinPath(dirCfg,"nibolo-master/install.sh"),userName])
+   if rv == 0: # promt for restart
+    removeDir(joinPath(dirCfg,"nibolo-master"))
+    if yesOrNo("Update successful ! Restart now ?"):
+     discard execShellCmd("nibolo")
+     quit()
+    else:
+     return
+   else:
+    mainWin.error("Download successful, installing failed..")
+ else:
+  mainWin.error("Extracting zip archive failed, please install unzip.")
+
+
+proc updateCheck(arg: string) =
+ if isNewVersion(arg):
+  if yesOrNo("New version of Nibolo available ! Update ?"):
+   when defined(Windows):
+    updateWin()
+   else:
+    updateNix()
+  else:
+   discard
+ else:
+  discard
+
+proc pwMainGetSize(widget: PWidget,  allocation: PAllocation) =
+ pwW = allocation.width
+ pwH = allocation.height
+
+
+proc vmSaveImgAs() =
+ if viewMode == false : return
+ var
+  name = fpViewMode
+  curFile: TSplitPath = splitFile(name)
+  sugPath: string = joinPath(joinPath(dirSaveTo,curFile.name),curFile.ext)
+ let newPath = mainWin.chooseFileToSave(sugPath)
+ if newPath == "":
+  return
+ else:
+  try:
+   copyFile(fpViewMode,newPath)
+   waitChoice = false
+  except:
+   mainWin.error("Failed saving file to $1" % [newPath])
+
+proc vmSaveImg() =
+ if viewMode == false: return
+ var
+  name = fpViewMode
+  newPath: string = ""
+ when defined(Windows):
+  name.delete(0,rfind(name, '\\'))
+ else:
+  name.delete(0,rfind(name, '/'))
+
+ newPath = joinPath(dirSaveTo , name)
+ try:
+  copyFile(fpViewMode,newPath)
+  waitChoice = false
+ except:
+  mainWin.error("Failed saving file to $1" % [newPath])
+
+proc vmNextImg() =
+ waitChoice = false
+
+proc startUp()=
+ var
+  vbMain,hbMain,vbSec1,vbSec2,hbFill: PWidget
+  bStop,bQuit,bUpdate,bProfEdit,bProfReset,bProfUpdate: PButton
+  bSaveImg,bSaveImgAs,bNextImg: PButton
   labDummy: PLabel
 
- nimrod_init()
  nibolo.setCfgPath()
+ nimrod_init()
  mainWin = window_new(WINDOW_TOPLEVEL)
- discard signal_connect(mainWin, "destroy", SIGNAL_FUNC(nibolo.destroy), nil)
+ mainWin.set_position(WIN_POS_MOUSE)
  mainWin.set_title("Nibolo")
- mainWin.resize(700,380)
- mainWin.set_position(WIN_POS_CENTER)
- set_border_width(PContainer(mainWin),3)
+ mainWin.set_default_size(700,400)
+ discard signal_connect(mainWin, "destroy", SIGNAL_FUNC(nibolo.destroy), nil)
 
- hbMain = hbox_new(false,5)
- vbMain = vbox_new(false,5)
- vbSec = vbox_new(false,5)
- add(mainWin, hbMain)
- pack_start(PBox(hbMain), vbMain, true, true, 0)
- pack_start(PBox(hbMain), vbSec, true, true, 0)
+ vbMain = vbox_new(false,2)
+ mainWin.add(vbMain)
 
- hbFill = hbox_new(false,5)
- pack_start(PBox(vbMain), hbFill, false, true, 0)
+ hbMain = hbox_new(false,2)
+ pack_start(BOX(vbMain), hbMain, true, true,0)
+ # Left side vbox
+ vbSec1 = vbox_new(false,3)
+ pack_start(BOX(hbMain), vbSec1, false, false,0)
 
+ hbFill = hbox_new(false,0)
+ pack_start(BOX(vbSec1), hbFill, false, false,0)
  labDummy = label_new("Source:")
- labDummy.set_size_request(50,15)
- pack_start(PBox(hbFill), labDummy, false, false, 0)
+ labDummy.set_size_request(55,15)
+ pack_start(BOX(hbFill), labDummy, false, false, 0)
+
  cbProf = combo_box_text_new()
  set_tooltip_text(cbProf,"Select booru from list")
- pack_start(PBox(hbFill), cbProf, true, true, 0)
+ pack_start(BOX(hbFill), cbProf, true, true, 0)
 
- hbFill = hbox_new(false,5)
- pack_start(PBox(vbMain), hbFill, false, true, 0)
+ hbFill = hbox_new(false,0)
+ pack_start(BOX(vbSec1), hbFill, false,false,0)
  labDummy = label_new("Tags:")
- labDummy.set_size_request(50,15)
- pack_start(PBox(hbFill), labDummy, false, false, 0)
+ labDummy.set_size_request(55,15)
+ pack_start(BOX(hbFill), labDummy, false, false, 0)
+
  enTags = entry_new()
  set_tooltip_text(enTags,"Enter search tags here")
- pack_start(PBox(hbFill), enTags, true, true, 0)
+ pack_start(BOX(hbFill), enTags, true, true, 0)
 
- hbFill = hbox_new(false,5)
- pack_start(PBox(vbMain), hbFill, false, true, 0)
+ hbFill = hbox_new(false,0)
+ pack_start(BOX(vbSec1), hbFill, false,false,0)
  labDummy = label_new("Folder:")
- labDummy.set_size_request(50,15)
- pack_start(PBox(hbFill), labDummy, false, false, 0)
+ labDummy.set_size_request(55,15)
+ pack_start(BOX(hbFill), labDummy, false, false, 0)
+
  cbFolder = button_new("Choose Folder")
  set_tooltip_text(cbFolder,"Select folder to save fetched images into")
- discard signal_connect(cbFolder, "clicked", SIGNAL_FUNC(nibolo.chooseFolder), nil)
- pack_start(PBox(hbFill), cbFolder, true, true, 0)
+ discard signal_connect(cbFolder, "clicked", SIGNAL_FUNC(nibolo.chooseFolder), cbFolder)
+ pack_start(BOX(hbFill), cbFolder, true, true, 0)
 
- hbFill = hbox_new(false,5)
- pack_start(PBox(vbMain), hbFill, false, true, 0)
+ hbFill = hbox_new(true,0)
+ pack_start(BOX(vbSec1), hbFill, false,false,0)
+
  bStart = button_new("Start")
  set_tooltip_text(bStart,"Start fetching images")
  discard signal_connect(bStart, "clicked", SIGNAL_FUNC(nibolo.startGrab), nil)
- pack_start(PBox(hbFill), bStart, true, true, 0)
+ pack_start(BOX(hbFill), bStart, true, true, 0)
  bStop = button_new("Stop")
  set_tooltip_text(bStop,"Stop fetching images")
  discard signal_connect(bStop, "clicked", SIGNAL_FUNC(nibolo.stopGrab), nil)
- pack_end(PBox(hbFill), bStop, true, true, 0)
+ pack_end(BOX(hbFill), bStop, true, true, 0)
 
  labDummy = label_new("Nibolo - Nim Booru Loader | $1" % [VERSION])
- labDummy.set_size_request(50,15)
- pack_start(PBox(vbMain), labDummy, false, false, 30)
-
- hbFill = hbox_new(false,5)
- pack_start(PBox(vbMain), hbFill, false, true, 0)
+ pack_start(BOX(vbSec1), labDummy, false, false, 20)
 
  sbInfo = statusbar_new()
  set_tooltip_text(sbInfo,"Info status bar...")
  discard push(sbInfo, 1, "Status: Idle...")
- pack_end(PBox(hbFill), sbInfo, true, true, 0)
+ pack_start(BOX(vbSec1), sbInfo, false, false, 5)
 
- hbFill = hbox_new(false,5)
- pack_start(PBox(vbMain), hbFill, false, true, 0)
  sbProgress = statusbar_new()
  set_tooltip_text(sbProgress,"Supposedly fetching status bar...")
  discard push(sbProgress, 1, "")
- pack_end(PBox(hbFill), sbProgress, true, true, 0)
+ pack_start(BOX(vbSec1), sbProgress, false, false, 5)
+
+ vmToggle = toggle_button_new("View mode toggle")
+ set_tooltip_text(vmToggle,"Browse trough your search and pick images to save manualy")
+ pack_start(BOX(vbSec1), vmToggle, false, false, 0)
+
+ hbFill = hbox_new(false,0)
+ pack_start(BOX(vbSec1), hbFill, false, false, 0)
+
+ bSaveImg = button_new_from_stock(STOCK_SAVE)
+ set_tooltip_text(bSaveImg,"Save Image (View Mode)")
+ discard signal_connect(bSaveImg, "clicked", SIGNAL_FUNC(nibolo.vmSaveImg), nil)
+ pack_start(BOX(hbFill), bSaveImg, false, false, 0);
+
+ bSaveImgAs = button_new_from_stock(STOCK_SAVE_AS)
+ set_tooltip_text(bSaveImgAs,"Save Image As (View Mode)")
+ discard signal_connect(bSaveImgAs, "clicked", SIGNAL_FUNC(nibolo.vmSaveImgAs), nil)
+ pack_start(BOX(hbFill), bSaveImgAs, false, false, 0);
+
+ bNextImg = button_new_from_stock(STOCK_MEDIA_NEXT)
+ set_tooltip_text(bNextImg,"Next Image (View Mode)")
+ discard signal_connect(bNextImg, "clicked", SIGNAL_FUNC(nibolo.vmNextImg), nil)
+ pack_start(BOX(hbFill), bNextImg, false, true, 0);
+
+ # right side
+ vbSec2 = vbox_new(false,0)
+ pack_start(BOX(hbMain), vbSec2, true,true,0)
 
  pwMain = image_new()
  set_tooltip_text(pwMain,"The ultimate donuts loving goddess !")
- pwMain.set_size_request(400,350)
- pack_start(PBox(vbSec), pwMain, false, false, 0)
- imMain = pixbuf_new_from_file_at_size(fpPicMain, 400,350,nil)
- set_from_pixbuf(PImage(pwMain),imMain)
+ discard signal_connect(pwMain, "size-allocate", SIGNAL_FUNC(nibolo.pwMainGetSize), nil)
+ pack_start(BOX(vbSec2), pwMain, true, true, 0)
 
- hbFill = hbox_new(false,5)
- pack_start(PBox(vbSec), hbFill, false, false, 0)
+ hbFill = hbox_new(false,2)
+ pack_end(BOX(vbSec2), hbFill, false, false, 0)
 
  bQuit = button_new("Quit")
  set_tooltip_text(bQuit,"Quit Nibolo")
  discard signal_connect(bQuit, "clicked", SIGNAL_FUNC(nibolo.destroy), nil)
- pack_end(PBox(hbFill), bQuit, true, true, 10)
+ pack_end(PBox(hbFill), bQuit, true, false, 0)
 
- bUpdate = button_new("Update")
- set_tooltip_text(bUpdate,"Update Nibolo (soonTM)")
- discard signal_connect(bUpdate, "clicked", SIGNAL_FUNC(nibolo.update), nil)
- pack_end(PBox(hbFill), bUpdate, true, true, 5)
+ bProfUpdate = button_new("Refresh 'source'")
+ set_tooltip_text(bProfUpdate,"Refresh source list")
+ discard signal_connect(bProfUpdate, "clicked", SIGNAL_FUNC(nibolo.updateProfilesList), nil)
+ pack_end(PBox(hbFill), bProfUpdate, true, false, 0)
 
- bProFile = button_new("Edit Profiles.ini")
- set_tooltip_text(bProFile,"Opens your default editor.. maybe")
- discard signal_connect(bProFile, "clicked", SIGNAL_FUNC(nibolo.editProfiles), nil)
- pack_end(PBox(hbFill), bProFile, true, true, 5)
+ bProfEdit = button_new("Edit Profiles")
+ set_tooltip_text(bProfEdit,"Opens your default editor.. maybe")
+ discard signal_connect(bProfEdit, "clicked", SIGNAL_FUNC(nibolo.editProfiles), nil)
+ pack_end(PBox(hbFill), bProfEdit, true, false, 0)
+
+ bProfReset = button_new("Reset Profiles")
+ set_tooltip_text(bProfReset,"Reset your Profiles.ini ...")
+ discard signal_connect(bProfReset, "clicked", SIGNAL_FUNC(nibolo.resetProfiles), nil)
+ pack_start(PBox(hbFill), bProfReset, true, false, 0)
 
  fillProfileComboBox()
  mainWin.show_all()
+
+ imMain = pixbuf_new_from_file_at_size(fpPicMain, pwW, pwH,nil)
+ set_from_pixbuf(PImage(pwMain),imMain)
+
+ while gtk2.events_pending () > 0:
+  discard gtk2.main_iteration()
+
+ when defined(ssl):
+  updateCheck(VERSION)
  main()
+
 
 when isMainModule: nibolo.startUp()
