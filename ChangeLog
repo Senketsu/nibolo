@@ -1,4 +1,10 @@
-*** 2015-05-09 Senketsu <Senketsu@cock.li> Nibolo version 0.1.1
+*** 2015-05-18 Senketsu <Senketsu@cock.li> Nibolo version 0.1.2
+* Add: Anti server rape toggle, insert small wait time between DLs
+* Add: More hardcoded profiles (idk why at all, might get purged later)
+* Add: Option to DL profiles from nibolo's github page
+* Add: Cookie profile option (e.g: pixiv)
+*
+*** 2015-05-16 Senketsu <Senketsu@cock.li> Nibolo version 0.1.1
 * Add: View mode (step trough images of your search and pick which to save)
 * Add: Update check
 * Add: Self update (*nix)

@@ -2,7 +2,7 @@ import os, strutils, streams, httpclient , parsexml , parsecfg , browsers
 import gtk2 , gdk2pixbuf , glib2  , dialogs
 
 const
- VERSION = "v0.1.1"
+ VERSION = "v0.1.2"
 
 type
  TSplitPath = tuple
@@ -10,7 +10,7 @@ type
  TLinkData* = tuple
   url,ext,name: string
  TBooruProf* = tuple
-  name,mUrl,sUrl,sUrlOpt1,sUrlOpt2,parEle,parUrl,parExt,parName,iMult,iBase: string
+  name,mUrl,sUrl,sUrlOpt1,sUrlOpt2,parEle,parUrl,parExt,parName,iMult,iBase,cookie: string
   repStr: array[0..3, array[0..1,string]]
  PBooruProf* = ref TBooruProf
 
@@ -20,11 +20,11 @@ var
  imMain: PPixbuf
  cbProf: PComboBoxText
  sbProgress,sbInfo: PStatusbar
- vmToggle: PToggleButton
+ vmToggle,arToggle: PToggleButton
  cbFolder,bStart: PButton
  actProfile: PBooruProf
  dirCfg,dirSaveTo,dirTemp: string = ""
- stopME,restartME,viewMode: bool = false
+ stopME,restartME,viewMode,dontRapeME: bool = false
  waitChoice = true
  profCount: int = 0
  pwW,pwH: gint = 0
@@ -63,6 +63,19 @@ proc chooseFolder(widget: PWidget, data: Pgpointer) =
   set_tooltip_text(cbFolder,getPath)
   dirSaveTo = getPath
 
+proc downloadFile(url: string, outputFilename: string,eHeaders: string) =
+ var f: File
+ if open(f, outputFilename, fmWrite):
+  f.write(getContent(url, extraHeaders=eHeaders))
+  f.close()
+ else:
+  var e: ref IOError
+  new(e)
+  e.msg = "Unable to open file"
+  raise e
+
+
+
 proc protoDownload(curProf: PBooruProf,folder: string, data: TLinkData): bool =
  var
   acceptTypes: seq[string] = @[".png",".jpeg",".jpg",".jpe",".bmp",".tiff",".tif"]
@@ -71,6 +84,7 @@ proc protoDownload(curProf: PBooruProf,folder: string, data: TLinkData): bool =
   imPreview: PPixbuf
   splitLink: seq[string]
  viewMode = get_active(vmToggle)
+ dontRapeME = get_active(arToggle)
  # Seems like simplest solution for now
  if curProf.repStr[0][0] != "":
   buff = data.url
@@ -117,22 +131,26 @@ proc protoDownload(curProf: PBooruProf,folder: string, data: TLinkData): bool =
   if fileExists(filePath):
    return
 
- # Request header for generated link, if file is not found, change ext and try again
  var
   respGet: Response
   httpCode: string = ""
 
  try:
-  respGet = request(dlLink, httpHead)
+  respGet = request(dlLink, httpHead , extraHeaders=
+   if curProf.cookie != "": curProf.cookie else: "")
   httpCode = respGet.status
  except:
   return
-
+ if dontRapeME:
+  sleep(1500)
  # Checks, checks, checks , trying to avoid downloading invalid files
  if httpCode.startsWith("200"):
   echo "Downloading: $1" % [dlLink]
   try:
-   downloadFile(dlLink ,filePath)
+   if curProf.cookie != "":
+    downloadFile(dlLink ,filePath, curProf.cookie)
+   else:
+    downloadFile(dlLink ,filePath)
    imPreview = pixbuf_new_from_file_at_size(filePath, pwW,pwH,nil)
    set_from_pixbuf(PImage(pwMain),imPreview)
    if viewMode:
@@ -155,7 +173,8 @@ proc protoDownload(curProf: PBooruProf,folder: string, data: TLinkData): bool =
    sExt = ext
    echo "Trying: $1" % [dlLink]
    try:
-    respGet = request(dlLink, httpHead)
+    respGet = request(dlLink, httpHead , extraHeaders=
+     if curProf.cookie != "": curProf.cookie else: "")
     httpCode = respGet.status
    except:
     break
@@ -168,7 +187,10 @@ proc protoDownload(curProf: PBooruProf,folder: string, data: TLinkData): bool =
       filePath = joinPath(folder,fileName)
       if fileExists(filePath):
        return
-     downloadFile(dlLink ,filePath)
+     if curProf.cookie != "":
+      downloadFile(dlLink ,filePath, curProf.cookie)
+     else:
+      downloadFile(dlLink ,filePath)
      imPreview = pixbuf_new_from_file_at_size(filePath, pwW,pwH,nil)
      set_from_pixbuf(PImage(pwMain),imPreview)
      if viewMode:
@@ -242,7 +264,11 @@ proc protoSearch(searchTag, saveFolder: string, curProf: PBooruProf) =
    requestURL = "$1$2" % [curProf.sUrl,searchOpt1]
 
   echo ("Looking trough $1 ..." % [requestURL])
-  respGet = request(requestURL,httpGet)
+  respGet = request(requestURL, httpGet , extraHeaders=
+   if curProf.cookie != "": curProf.cookie else: "")
+
+  if respGet.status.startsWith("200") == false:
+   return
 
   if respFile.open( fpResponse ,fmWrite):
     respFile.writeln(respGet.body)
@@ -300,10 +326,10 @@ proc protoSearch(searchTag, saveFolder: string, curProf: PBooruProf) =
         if protoDownload(curProf,saveFolder,linkData):
          inc(iDL)
          discard sbProgress.push(1,"Downloaded $1 images" % [$iDL])
+         tryNextPage = true
         while gtk2.events_pending () > 0:
          discard gtk2.main_iteration()
         # We are at the end of element we were parsing from, we can break the loop
-        tryNextPage = true
         gotLink = false
         linkData.url = ""
         linkData.ext = ""
@@ -356,6 +382,8 @@ proc createDefaultProfiles()=
   cfgFile.writeln("# iStep - set to 0 = no loop (for chans)")
   cfgFile.writeln("# --\"string\":\"string\" string replacement in parsed URLs")
   cfgFile.writeln("#  If not defined, mainUrl & parseUrl = dl URL (e.g: danbooru)")
+  cfgFile.writeln("# If site requires cookies(e.g: pixiv) use 'cookie=' option")
+  cfgFile.writeln("# These options should cover most of boorus/chans/etc..")
 
   cfgFile.writeln("[danbooru]")
   cfgFile.writeln("mainUrl=\"http://danbooru.donmai.us\"")
@@ -369,8 +397,22 @@ proc createDefaultProfiles()=
   cfgFile.writeln("parseExt=\"data-file-ext\"")
   cfgFile.writeln("parseName=\"data-md5\"")
 
+  cfgFile.writeln("[gelbooru]")
+  cfgFile.writeln("mainUrl=\"http://gelbooru.com/\"")
+  cfgFile.writeln("searchUrl=\"http://gelbooru.com/index.php?page=post&s=list&\"")
+  cfgFile.writeln("sUrlOpt1=\"tags=[s]\"")
+  cfgFile.writeln("sUrlOpt2=\"pid=[i]\"")
+  cfgFile.writeln("iBase=\"0\"")
+  cfgFile.writeln("iStep=\"42\"")
+  cfgFile.writeln("parseElement=\"img\"")
+  cfgFile.writeln("parseUrl=\"src\"")
+  cfgFile.writeln("parseExt=\"\"")
+  cfgFile.writeln("parseName=\"\"")
+  cfgFile.writeln("--\"/thumbnails/\":\"/images/\"")
+  cfgFile.writeln("--\"/thumbnail_\":\"/\"")
+
   cfgFile.writeln("[safebooru]")
-  cfgFile.writeln("mainUrl=\"http://safebooru.org/images/\"")
+  cfgFile.writeln("mainUrl=\"http://safebooru.org/\"")
   cfgFile.writeln("searchUrl=\"http://safebooru.org/index.php?page=post&s=list&\"")
   cfgFile.writeln("sUrlOpt1=\"tags=[s]\"")
   cfgFile.writeln("sUrlOpt2=\"pid=[i]\"")
@@ -394,6 +436,36 @@ proc createDefaultProfiles()=
   cfgFile.writeln("parseUrl=\"src\"")
   cfgFile.writeln("parseExt=\"\"")
   cfgFile.writeln("parseName=\"\"")
+  cfgFile.writeln("--\"/thumbnails/\":\"/images/\"")
+  cfgFile.writeln("--\"/thumbnail_\":\"/\"")
+
+  cfgFile.writeln("[Drawfriends]")
+  cfgFile.writeln("mainUrl=\"http://drawfriends.booru.org/\"")
+  cfgFile.writeln("searchUrl=\"http://drawfriends.booru.org/index.php?page=post&s=list&\"")
+  cfgFile.writeln("sUrlOpt1=\"tags=[s]\"")
+  cfgFile.writeln("sUrlOpt2=\"pid=[i]\"")
+  cfgFile.writeln("iBase=\"0\"")
+  cfgFile.writeln("iStep=\"20\"")
+  cfgFile.writeln("parseElement=\"img\"")
+  cfgFile.writeln("parseUrl=\"src\"")
+  cfgFile.writeln("parseExt=\"\"")
+  cfgFile.writeln("parseName=\"\"")
+  cfgFile.writeln("--\"thumbs.booru.org\":\"img.booru.org\"")
+  cfgFile.writeln("--\"/thumbnails/\":\"/images/\"")
+  cfgFile.writeln("--\"/thumbnail_\":\"/\"")
+
+  cfgFile.writeln("[Realbooru]")
+  cfgFile.writeln("mainUrl=\"http://rb.booru.org/\"")
+  cfgFile.writeln("searchUrl=\"http://rb.booru.org/index.php?page=post&s=list&\"")
+  cfgFile.writeln("sUrlOpt1=\"tags=[s]\"")
+  cfgFile.writeln("sUrlOpt2=\"pid=[i]\"")
+  cfgFile.writeln("iBase=\"0\"")
+  cfgFile.writeln("iStep=\"20\"")
+  cfgFile.writeln("parseElement=\"img\"")
+  cfgFile.writeln("parseUrl=\"src\"")
+  cfgFile.writeln("parseExt=\"\"")
+  cfgFile.writeln("parseName=\"\"")
+  cfgFile.writeln("--\"thumbs.booru.org\":\"img.booru.org\"")
   cfgFile.writeln("--\"/thumbnails/\":\"/images/\"")
   cfgFile.writeln("--\"/thumbnail_\":\"/\"")
 
@@ -439,21 +511,6 @@ proc createDefaultProfiles()=
   cfgFile.writeln("--\"/preview\":\"\"")
   cfgFile.writeln("--\"//c.\":\"http://cs.\"")
 
-  cfgFile.writeln("# Responses breaks parser - commented out for now")
-  cfgFile.writeln("# [sankakuIdol]")
-  cfgFile.writeln("# mainUrl=\"http://is.sankakucomplex.com/data/\"")
-  cfgFile.writeln("# searchUrl=\"https://idol.sankakucomplex.com/?commit=Search&\"")
-  cfgFile.writeln("# sUrlOpt1=\"tags=[s]\"")
-  cfgFile.writeln("# sUrlOpt2=\"page=[i]\"")
-  cfgFile.writeln("# iBase=\"1\"")
-  cfgFile.writeln("# iStep=\"1\"")
-  cfgFile.writeln("# parseElement=\"img\"")
-  cfgFile.writeln("# parseUrl=\"src\"")
-  cfgFile.writeln("# parseExt=\"\"")
-  cfgFile.writeln("# parseName=\"\"")
-  cfgFile.writeln("# --\"/preview\":\"\"")
-  cfgFile.writeln("# --\"//i.\":\"http://is.\"")
-
   cfgFile.flushFile()
   cfgFile.close()
  else:
@@ -471,6 +528,7 @@ proc resetCurProfile(curProf: PBooruProf) =
  curProf.parExt = ""
  curProf.iMult = ""
  curProf.iBase = ""
+ curProf.cookie = ""
 
  for i in 0..curProf.repStr.high():
   curProf.repStr[i][0] = ""
@@ -520,6 +578,9 @@ proc loadProfile*(profName: string,curProf: PBooruProf): bool =
           curProf.iMult = event.value
          of "iBase":
           curProf.iBase = event.value
+         of "cookie":
+          curProf.cookie = "Cookie: $1$2\c\L" % [event.value,
+           if curProf.mUrl != "": "\L" & curProf.mUrl else: ""]
          else:
           discard
 
@@ -835,10 +896,19 @@ proc updateCheck(arg: string) =
  else:
   discard
 
+proc downloadProfiles() =
+ let tempProf = joinPath(dirTemp,"profiles.ini")
+ try:
+  downloadFile("https://raw.githubusercontent.com/Senketsu/nibolo/master/data/profiles.ini",
+   tempProf)
+  copyFile(tempProf,fpProfiles)
+  updateProfilesList()
+ except:
+  mainWin.error("Failed to fetch profiles.ini from github")
+
 proc pwMainGetSize(widget: PWidget,  allocation: PAllocation) =
  pwW = allocation.width
  pwH = allocation.height
-
 
 proc vmSaveImgAs() =
  if viewMode == false : return
@@ -879,7 +949,7 @@ proc vmNextImg() =
 proc startUp()=
  var
   vbMain,hbMain,vbSec1,vbSec2,hbFill: PWidget
-  bStop,bQuit,bUpdate,bProfEdit,bProfReset,bProfUpdate: PButton
+  bStop,bQuit,bUpdate,bProfEdit,bProfReset,bProfUpdate,bProfDl: PButton
   bSaveImg,bSaveImgAs,bNextImg: PButton
   labDummy: PLabel
 
@@ -956,9 +1026,16 @@ proc startUp()=
  discard push(sbProgress, 1, "")
  pack_start(BOX(vbSec1), sbProgress, false, false, 5)
 
- vmToggle = toggle_button_new("View mode toggle")
+ hbFill = hbox_new(false,0)
+ pack_start(BOX(vbSec1), hbFill, false, false, 0)
+
+ vmToggle = toggle_button_new("View mode")
  set_tooltip_text(vmToggle,"Browse trough your search and pick images to save manualy")
- pack_start(BOX(vbSec1), vmToggle, false, false, 0)
+ pack_start(BOX(hbFill), vmToggle, false, false, 0)
+
+ arToggle = toggle_button_new("Anti Rape")
+ set_tooltip_text(arToggle,"Add small pause (1.5s) between downloads to not overload servers.")
+ pack_start(BOX(hbFill), arToggle, false, false, 0)
 
  hbFill = hbox_new(false,0)
  pack_start(BOX(vbSec1), hbFill, false, false, 0)
@@ -995,6 +1072,11 @@ proc startUp()=
  discard signal_connect(bQuit, "clicked", SIGNAL_FUNC(nibolo.destroy), nil)
  pack_end(PBox(hbFill), bQuit, true, false, 0)
 
+ bProfDl = button_new("DL Profiles")
+ set_tooltip_text(bProfDl,"Downloads Profiles.ini from nibolo github page...")
+ discard signal_connect(bProfDl, "clicked", SIGNAL_FUNC(nibolo.downloadProfiles), nil)
+ pack_start(PBox(hbFill), bProfDl, true, false, 0)
+
  bProfUpdate = button_new("Refresh 'source'")
  set_tooltip_text(bProfUpdate,"Refresh source list")
  discard signal_connect(bProfUpdate, "clicked", SIGNAL_FUNC(nibolo.updateProfilesList), nil)
@@ -1006,7 +1088,7 @@ proc startUp()=
  pack_end(PBox(hbFill), bProfEdit, true, false, 0)
 
  bProfReset = button_new("Reset Profiles")
- set_tooltip_text(bProfReset,"Reset your Profiles.ini ...")
+ set_tooltip_text(bProfReset,"Resets your Profiles.ini...")
  discard signal_connect(bProfReset, "clicked", SIGNAL_FUNC(nibolo.resetProfiles), nil)
  pack_start(PBox(hbFill), bProfReset, true, false, 0)
 
