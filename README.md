@@ -43,7 +43,7 @@ Had to satisfy my need for more oshino images.
 * The username is needed for compiling without root privilage while installing does need it
 
 ### Windows
-* Get gtk2 runtime libraries [Windows 32bit](http://www.gtk.org/download/) or [Windows 64bit](http://lvserver.ugent.be/gtk-win64/gtk2-runtime/gtk2-runtime-2.24.25-2015-01-21-ts-win64.e
+* Get gtk2 runtime libraries [Windows 32bit](http://www.gtk.org/download/) or [Windows 64bit](http://lvserver.ugent.be/gtk-win64/gtk2-runtime/gtk2-runtime-2.24.25-2015-01-21-ts-win64.exe)
 * Download **Nibolo** from the [release](https://github.com/Senketsu/nibolo/releases) page
 * Enjoy !
 
