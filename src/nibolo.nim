@@ -843,12 +843,14 @@ proc updateWin() =
 proc updateNix() =
  var
   nextVer = getNextVersion(VERSION)
+  foldVer = nextVer
   fpMasterUrl = "https://github.com/Senketsu/nibolo/archive/"
   fpNewVer = joinPath(dirCfg,"Nibolo_$1.zip" % [nextVer])
   homeDir: string = getHomeDir()
   userName: string = ""
   rv: int
 
+ foldVer.delete(0,0)
  homeDir.delete(homeDir.len,homeDir.len)
  userName = homeDir
  userName.delete(0,rfind(userName,'/'))
@@ -867,12 +869,14 @@ proc updateNix() =
   let pass = promptEntry("Enter sudo password for installation")
   if pass == "":
    mainWin.info("Installation canceled.")
-   removeDir(joinPath(dirCfg,"nibolo-master"))
+   removeDir(joinPath(dirCfg,"nibolo-$1" % [foldVer]))
+   removeFile(fpNewVer)
    return
   else:
-   rv = execShellCmd(" echo $1 | sudo -S $2 $3" % [pass,joinPath(dirCfg,"nibolo-master/install.sh"),userName])
+   rv = execShellCmd(" echo $1 | sudo -S $2 $3" % [pass,joinPath(dirCfg,"nibolo-$1/install.sh"  % [foldVer]),userName])
    if rv == 0: # promt for restart
-    removeDir(joinPath(dirCfg,"nibolo-master"))
+    removeDir(joinPath(dirCfg,"nibolo-$1" % [foldVer]))
+    removeFile(fpNewVer)
     if yesOrNo("Update successful ! Restart now ?"):
      discard execShellCmd("nibolo")
      quit()
