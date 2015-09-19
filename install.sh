@@ -4,7 +4,7 @@ username=$1
 cd $path
 echo $path
 echo "Trying to compile 'nibolo' "
-sudo -u $username nim c -d:ssl -d:release $path/src/nibolo.nim
+sudo -u $username nim c --threads:on -d:ssl -d:release $path/src/nibolo.nim
 
 echo "Installing files"
 mkdir /usr/local/share/doc/nibolo

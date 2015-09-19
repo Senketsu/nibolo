@@ -17,7 +17,7 @@ Had to satisfy my need for more oshino images.
 * View Mode - Preview images and choose which to download
 * Update Check
 * DL profiles from this repo
-* 'Self updater' (*nix)
+* 'Self updater' (*nix) __As of 0.1.3 might be not working , depending on your nim's devel executable name
 
 ### Notes:
 ------------------------
@@ -56,6 +56,9 @@ Had to satisfy my need for more oshino images.
 **Requirements for compiling manualy (Nibolo 0.1.3)**
 * Nim Compiler 0.11.3 (Currently devel branch)
 * GTK2 wrapper & dialogs module (nimble install gtk2 | dialogs)
+
+* WIN: nim c --threads:on -d:ssl -d:release -d:nimOldDlls --app:gui nibolo.nim
+* NIX: nim c --threads:on -d:ssl -d:release nibolo.nim
 
 ### Runtime depends:
 ------------------------
