@@ -57,7 +57,8 @@ Had to satisfy my need for more oshino images.
 * Nim Compiler 0.11.3 (Currently devel branch)
 * GTK2 wrapper & dialogs module (nimble install gtk2 | dialogs)
 
-* WIN: nim c --threads:on -d:ssl -d:release -d:nimOldDlls --app:gui nibolo.nim
+**Compile options**
+* WIN: nim c --threads:on -d:ssl -d:release -d:nimOldDLLs --app:gui nibolo.nim
 * NIX: nim c --threads:on -d:ssl -d:release nibolo.nim
 
 ### Runtime depends:
