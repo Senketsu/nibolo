@@ -36,6 +36,7 @@ Had to satisfy my need for more oshino images.
 ### Windows
 * Download **Nibolo** (***with_GTK2 recommended**)from the [release](https://github.com/Senketsu/nibolo/releases) page
 * Enjoy !
+
 ### Notes:
 **Any Nibolo's Windows installations are shipped with openssl dll's**
 **Recommended to download Nibolo's Windows installation with all runtime requirements (*with_GTK2)**
@@ -48,6 +49,7 @@ Had to satisfy my need for more oshino images.
 
 
 ### Compiling Manualy:
+------------------------
 **Requirements for compiling manualy (Nibolo 0.1.2 or older)**
 * GTK2 wrapper (nimble install gtk2) **if you compile on devel, 'dialogs' too**
 
@@ -55,7 +57,8 @@ Had to satisfy my need for more oshino images.
 * Nim Compiler 0.11.3 (Currently devel branch)
 * GTK2 wrapper & dialogs module (nimble install gtk2 | dialogs)
 
-### Runtime dependancies:
+### Runtime depends:
+------------------------
 **Requirements for using Nibolo (any version)**
 * GTK2 runtime libraries
 * **(Win):**  GTK2 Runtime Installations (not recommended) [Windows 32bit](http://downloads.sourceforge.net/gtk-win/gtk2-runtime-2.24.10-2012-10-10-ash.exe?download) or [Windows 64bit](http://lvserver.ugent.be/gtk-win64/gtk2-runtime/gtk2-runtime-2.24.25-2015-01-21-ts-win64.exe)
