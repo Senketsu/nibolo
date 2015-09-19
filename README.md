@@ -21,7 +21,7 @@ Had to satisfy my need for more oshino images.
 
 ### Notes:
 ------------------------
-* **Due to nature of update 0.1.3, nimble is only compilable on the devel branch(0.11.3)**
+* **Due to nature of update 0.1.3, Nibolo is only compilable on the devel branch(0.11.3)**
 * __Gui freezes can be noticable here and there, no better way to idle atm.__
 * ~~Currently due to Nim's limitations, threading is not possible within nibolo~~
 * ~~  Therefore expect nibolo's gui to be somewhat unresponsible at times~~
