@@ -33,21 +33,12 @@ Had to satisfy my need for more oshino images.
 
 ## Install:
 ------------------------
-**Requirements for compiling manualy (Nibolo 0.1.2 or older)**
-* **Manual Compiling** gtk2 wrapper (nimble install gtk2) **if you compile on devel, 'dialogs' too**
+### Windows
+* Download **Nibolo** (***with_GTK2 recommended**)from the [release](https://github.com/Senketsu/nibolo/releases) page
+* Enjoy !
+**Any Nibolo's Windows installations are shipped with openssl dll's**
 
-
-**Requirements for compiling manualy (Nibolo 0.1.3)**
-* **Manual Compiling** Nim Compiler 0.11.3 (Currently devel branch)
-* **Manual Compiling** gtk2 wrapper | dialogs module (nimble install gtk2 | dialogs)
-
-**Requirements for using Nibolo (any version)**
-* **Runtime** gtk2 runtime libraries (use your package manager or download installer with GTK2 dll's (RECOMMENDED)
-*   GTK2 Runtime Installations (not recommended) [Windows 32bit](http://downloads.sourceforge.net/gtk-win/gtk2-runtime-2.24.10-2012-10-10-ash.exe?download) or [Windows 64bit](http://lvserver.ugent.be/gtk-win64/gtk2-runtime/gtk2-runtime-2.24.25-2015-01-21-ts-win64.exe)
-* **Runtime** openssl library
-
-* **Any Nibolo's Windows installations are shipped with openssl dll's**
-* **Recommended to download Nibolo's Windows installation with all runtime requirements (gtk,ssl,few other dll)**
+**Recommended to download Nibolo's Windows installation with all runtime requirements (gtk,ssl,few other dll)**
 
 ### Linux
 * Run install.sh with 'sudo' and pass 'username' as param
@@ -55,10 +46,20 @@ Had to satisfy my need for more oshino images.
 * The username is needed for compiling without root privilage while installing does need it
 * (0.1.3) - If your Nim's devel executable is named differently (e.g: nimdev) rename it in the install.sh or install it manualy as you see fit ;3
 
-### Windows
-* Get gtk2 runtime libraries, either **use the installer with GTK2 lib included** or [Windows 32bit](http://downloads.sourceforge.net/gtk-win/gtk2-runtime-2.24.10-2012-10-10-ash.exe?download) or [Windows 64bit](http://lvserver.ugent.be/gtk-win64/gtk2-runtime/gtk2-runtime-2.24.25-2015-01-21-ts-win64.exe)
-* Download **Nibolo** from the [release](https://github.com/Senketsu/nibolo/releases) page
-* Enjoy !
+
+### Compiling Manualy:
+**Requirements for compiling manualy (Nibolo 0.1.2 or older)**
+* GTK2 wrapper (nimble install gtk2) **if you compile on devel, 'dialogs' too**
+
+**Requirements for compiling manualy (Nibolo 0.1.3)**
+* Nim Compiler 0.11.3 (Currently devel branch)
+* GTK2 wrapper & dialogs module (nimble install gtk2 | dialogs)
+
+### Runtime dependancies:
+**Requirements for using Nibolo (any version)**
+* GTK2 runtime libraries
+    (Win):  GTK2 Runtime Installations (not recommended) [Windows 32bit](http://downloads.sourceforge.net/gtk-win/gtk2-runtime-2.24.10-2012-10-10-ash.exe?download) or [Windows 64bit](http://lvserver.ugent.be/gtk-win64/gtk2-runtime/gtk2-runtime-2.24.25-2015-01-21-ts-win64.exe)
+* OpenSSL library
 
 ### Contact
 * Feedback , thoughts , bug reports ?
