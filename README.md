@@ -36,9 +36,9 @@ Had to satisfy my need for more oshino images.
 ### Windows
 * Download **Nibolo** (***with_GTK2 recommended**)from the [release](https://github.com/Senketsu/nibolo/releases) page
 * Enjoy !
+### Notes:
 **Any Nibolo's Windows installations are shipped with openssl dll's**
-
-**Recommended to download Nibolo's Windows installation with all runtime requirements (gtk,ssl,few other dll)**
+**Recommended to download Nibolo's Windows installation with all runtime requirements (*with_GTK2)**
 
 ### Linux
 * Run install.sh with 'sudo' and pass 'username' as param
@@ -58,7 +58,7 @@ Had to satisfy my need for more oshino images.
 ### Runtime dependancies:
 **Requirements for using Nibolo (any version)**
 * GTK2 runtime libraries
-    (Win):  GTK2 Runtime Installations (not recommended) [Windows 32bit](http://downloads.sourceforge.net/gtk-win/gtk2-runtime-2.24.10-2012-10-10-ash.exe?download) or [Windows 64bit](http://lvserver.ugent.be/gtk-win64/gtk2-runtime/gtk2-runtime-2.24.25-2015-01-21-ts-win64.exe)
+* **(Win):**  GTK2 Runtime Installations (not recommended) [Windows 32bit](http://downloads.sourceforge.net/gtk-win/gtk2-runtime-2.24.10-2012-10-10-ash.exe?download) or [Windows 64bit](http://lvserver.ugent.be/gtk-win64/gtk2-runtime/gtk2-runtime-2.24.25-2015-01-21-ts-win64.exe)
 * OpenSSL library
 
 ### Contact
