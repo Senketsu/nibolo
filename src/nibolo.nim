@@ -1,48 +1,53 @@
-import os, strutils, streams , parsexml , parsecfg , browsers
-import net_fix/nib_net , net_fix/nib_httpC
-# import httpclient, net
-import nib_types , nib_cfg ,nib_gui , nib_dler
+import os
+import asyncdispatch
+import private/projTypes
+import private/projUtils
+import private/gui
+import private/downloader
+
+when defined(Windows):
+  discard
+else:
+  discard
 
 var
- chanGui: StringChannel
- chanDler: StringChannel
- thrGui: Thread[int]
- thrDler: Thread[int]
+  channelMain: StringChannel
+  channelDler: StringChannel
+  threadMain: Thread[int]
+  threadDler: Thread[int]
 
-proc dlerStartThread(thrID: int) {.thread.} =
- var
-  paths: TPaths
+proc threadDlerStart(threadID: int) {.thread.} =
+  echoInfo("Downloader\t- initializing..")
+  var ndl = downloader.new(channelDler.addr, channelMain.addr)
+  # Load safebooru as default
+  if ndl.profilesLoad():
+    ndl.idle()
+  echo "End of thread dler"
 
- let chGui = chanGui.addr
- let chDler = chanDler.addr
-
- paths.setPaths()
- paths.dlerStartUp(chGui,chDler)
-
-
-proc guiStartThread(thrID: int) {.thread.} =
- var
-  paths: TPaths
-  nibCtrl: TControl
-
- let chGui = chanGui.addr
- let chDler = chanDler.addr
-
- paths.setPaths()
- paths.guiStartUp(nibCtrl,chGui,chDler)
+proc threadMainStart(threadID: int) {.thread.} =
+  echoInfo("Nibolo gui\t- initializing..")
+  let chanMain = channelMain.addr
+  let chanDler = channelDler.addr
+  gui.start(chanMain, chanDler)
+  echo "End of thread main"
 
 
-proc main() =
 
- chanGui.open()
- createThread(thrGui, guiStartThread, 0)
+proc launch() =
+  echoInfo("\t*** Nibolo starting***")
+  if not checkDirectories():
+    echoInfo("Quitting...")
+    quit()
 
- chanDler.open()
- createThread(thrDler, dlerStartThread, 1)
+  channelMain.open()
+  createThread(threadMain, threadMainStart, 0)
 
- joinThreads(thrGui,thrDler)
+  channelDler.open()
+  createThread(threadDler, threadDlerStart, 1)
 
- chanGui.close()
- chanDler.close()
+  joinThreads(threadMain, threadDler)
 
-when isMainModule: main()
+  channelMain.close()
+  channelDler.close()
+
+when isMainModule: nibolo.launch()
