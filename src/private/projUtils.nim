@@ -1,12 +1,12 @@
 import os, strutils, times
 
 const
-  VERSION* = "v0.2.0-alpha"
+  VERSION* = "v0.2.0-beta"
   NAME* = "nibolo"
   NAMEVER* = "$1 $2" % [NAME, VERSION]
-  LINK* = "https://github.com/Senketsu/pomfit"
+  LINK* = "https://github.com/Senketsu/nibolo"
   TWITTER* = "https://twitter.com/Senketsu_dev"
-  LICENSE* = LINK & "/blob/devel/LICENSE.txt"
+  LICENSE* = LINK & "/blob/devel/LICENSE"
 
 
 # macro for cOut

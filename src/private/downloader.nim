@@ -1,4 +1,4 @@
-import strutils, os, streams, httpclient, parsexml, md5, parsecfg
+import strutils, os, streams, httpclient, parsexml, parsecfg
 import asyncdispatch
 import projUtils
 import projTypes
@@ -6,14 +6,11 @@ import projTypes
 type
   NdlChans = tuple
     dl, main: ptr StringChannel
+    buffer: string
   
-  NdlStatus = enum
-    NdlRunning,
-    NdlPaused,
-    NdlStopped,
-    NdlQuit
 
   NdlProfile = tuple
+    active: string
     name, uri, api: string
     searchOpt: string
     parseEle: string
@@ -40,26 +37,29 @@ type
     NCNewTags   = ("NCNewTags")
     NCNext      = ("NCNext")
     NCNone      = ("NCNone")
+    NCUnkn      = ("NCUnkn")
     NCQuit      = ("NCQuit")
 
-  NdlCmd = tuple
-    cmd, args: string
-
   NdlOpt = tuple
-    slow, view, browse: bool
+    slow, view, browse, blocking: bool
 
+  NdlSes = tuple
+    iPage, iDownloads: int
+    iDuplicates, iDelay: int
+    hasData: bool
+    
   NdlObj = object
     chan: NdlChans
-    chanBuffer: string
     status: NdlStatus
     event: NdlEvent
     eventArgs: string
     prof: NdlProfile
-    activeProf: string
     nameType: NdlNameType
     searchTags: string
     saveFolder: string
+    savePath: string
     option: NdlOpt
+    session: NdlSes
 
   Ndl* = ref NdlObj
 
@@ -70,13 +70,13 @@ proc new*(chanDler, chanMain: ptr StringChannel): Ndl =
   result = new(Ndl)
   result.chan.dl = chanDler
   result.chan.main = chanMain
-  result.chanBuffer = ""
+  result.chan.buffer = ""
   result.status = NdlStopped
   result.event = NCNone
-  result.eventArgs = ""  
-  result.activeProf = ""
+  result.eventArgs = ""
   result.searchTags = ""
   result.saveFolder = getPath("dirPic")
+  result.prof.active = ""
   result.prof.name = ""
   result.prof.uri = ""
   result.prof.api = ""
@@ -88,24 +88,33 @@ proc new*(chanDler, chanMain: ptr StringChannel): Ndl =
 
 
 proc handleEvent(ndl: Ndl) =
-    if ndl.event != NCNone:
+    if ndl.event != NCUnkn:
       case ndl.event
         of NCQuit:
           ndl.status = NdlQuit
+          ndl.chan.main[].send("NdlQuit")
         of NCStart:
           case ndl.status
           of NdlStopped:
             ndl.status = NdlRunning
-            ndl.chan.main[].send("")
+            ndl.option.blocking = ndl.option.browse
+            ndl.chan.main[].send("NdlRunning")
+            ndl.chan.main[].send("smsg Search running..")
           of NdlPaused:
             ndl.status = NdlRunning
-            ndl.chan.main[].send("")
+            ndl.option.blocking = ndl.option.browse
+            ndl.chan.main[].send("NdlRunning")
+            ndl.chan.main[].send("smsg Search running..")
           of NdlRunning:
             ndl.status = NdlPaused
-            ndl.chan.main[].send("NdlStatus Paused")
+            ndl.option.blocking = true
+            ndl.chan.main[].send("NdlPaused")
+            ndl.chan.main[].send("smsg Search paused..")
           else: discard
         of NCStop:
           ndl.status = NdlStopped
+          ndl.chan.main[].send("NdlStopped")
+          ndl.chan.main[].send("smsg Search stopped..")
         
         of NCSaveFol:
           ndl.saveFolder = ndl.eventArgs
@@ -124,14 +133,18 @@ proc handleEvent(ndl: Ndl) =
         of NCOptBrowse:
           if ndl.eventArgs == "true":
             ndl.option.browse = true
+            ndl.option.blocking = true
           else:
             ndl.option.browse = false
+            ndl.option.blocking = (ndl.status == NdlPaused)
         of NCProfile:
-          ndl.activeProf = ndl.eventArgs
+          ndl.prof.active = ndl.eventArgs
           if not ndl.profilesLoad():
             ndl.chan.main[].send("ERR")
+        of NCSave, NCSaveAs, NCNext:
+          discard # We handle those externally
         else:
-          echoInfo("*Debug: Coudn't handle event '$1'" & $ndl.event)
+          echoInfo("Debug: Coudn't handle event '$1'" % $ndl.event)
           discard
 
 proc processCmd(ndl: Ndl) =
@@ -139,7 +152,7 @@ proc processCmd(ndl: Ndl) =
     cmd = ""
     args = ""
   try:
-    var splitCMD = ndl.chanBuffer.split(" ")
+    var splitCMD = ndl.chan.buffer.split(" ")
     for i in 0..splitCMD.high:
       if i == 0: cmd = splitCMD[i]
       if i > 0:
@@ -147,7 +160,7 @@ proc processCmd(ndl: Ndl) =
         args.add(" ")
     args.delete(args.len, args.len)
     ndl.eventArgs = args
-    ndl.chanBuffer = ""
+    ndl.chan.buffer = ""
   except:
     logEvent(true, "***Error: $1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
     return
@@ -165,59 +178,64 @@ proc processCmd(ndl: Ndl) =
   of "NCOptBrowse": ndl.event = NCOptBrowse
   of "NCNext": ndl.event = NCNext
   of "NCQuit": ndl.event = NCQuit
-  else: ndl.event = NCNone
+  else: ndl.event = NCUnkn
 
 
-proc update(ndl: Ndl, blocking: bool = false): NdlStatus =
+proc update(ndl: Ndl, blocking: bool = false): NdlEvent =
 
   if blocking:
-    ndl.chanBuffer = ndl.chan.dl[].recv()
+    ndl.chan.buffer = ndl.chan.dl[].recv()
+    ndl.processCmd()
+    ndl.handleEvent()
   else:
     var buff = ndl.chan.dl[].tryRecv()
     if buff.dataAvailable:
-      ndl.chanBuffer = buff.msg
-  ndl.processCmd()
-  ndl.handleEvent()
-  return ndl.status
+      ndl.chan.buffer = buff.msg
+      ndl.processCmd()
+      ndl.handleEvent()
+    else:
+      ndl.event = NCNone
+      ndl.eventArgs = ""
+  return ndl.event
 
 
 proc download(ndl: Ndl, fileURI, fileName, fileTags, fileHash: string) =
   var
-    savePath = ""
-    respGet: Response
     client = newHttpClient()
+  ndl.savePath = ""
 
   case ndl.nameType
   of NntName:
-    savePath = joinPath(ndl.saveFolder, fileName)
+    ndl.savePath = joinPath(ndl.saveFolder, fileName)
   of NntTags:
-    savePath = joinPath(ndl.saveFolder, fileTags)
-  of NNtHash:
-    savePath = joinPath(ndl.saveFolder, fileHash)
+    ndl.savePath = joinPath(ndl.saveFolder, fileTags)
+  of NntHash:
+    ndl.savePath = joinPath(ndl.saveFolder, fileHash)
   of NntCust:
     var name = ndl.prof.custName
     name = name.replace("[b]", ndl.prof.name)
     name = name.replace("[h]", fileHash)
     name = name.replace("[n]", fileName)
     name = name.replace("[t]", fileTags)
-    savePath = joinPath(ndl.saveFolder, name)
+    ndl.savePath = joinPath(ndl.saveFolder, name)
   else:
     discard
-  ## TODO maybe some actual duplicate check ?
-  if fileExists(savePath):
-    echo "skipped duplicate file"
-    return
-  
-  ## TODO Interactive mode
-  
   
   try:
-    client.downloadFile(fileURI, savePath)
+    ## TODO maybe some actual duplicate check ?
+    if not fileExists(ndl.savePath):
+      echoInfo("Debug: Downloading..\n\t$1" % [fileURI])
+      client.downloadFile(fileURI, ndl.savePath)
+      ndl.session.iDownloads += 1
+    else:
+      echoInfo("Debug: Skipped downloading duplicate file..\n\t$1" % fileURI)
+      ndl.session.iDuplicates += 1
+    
+    if ndl.option.view or ndl.option.browse:
+      ndl.chan.main[].send("pv $1" % ndl.savePath)
+    
   except:
     logEvent(true, "***Error: $1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
-  
-  if ndl.option.view or ndl.option.browse:
-    ndl.chan.main[].send("pv $1" % savePath)
 
 
 proc searchCleanup(parser: var XmlParser, stream: var FileStream, fp: string) =
@@ -226,64 +244,56 @@ proc searchCleanup(parser: var XmlParser, stream: var FileStream, fp: string) =
   removeFile(fp)
 
 
+proc clean(session: var NdlSes) =
+  session.iPage = 0
+  session.iDownloads = 0
+  session.iDuplicates = 0
+  session.iDelay = 3000
+  session.hasData = false
+
 proc search(ndl: Ndl) =
   var
-    acceptTypes: seq[string] = @[".png",".jpeg",".jpg",".jpe",".bmp",".tiff",".tif"]
     fpRespFile = getPath("response")
     client = newHttpClient()
     respGet: Response
     respFile: File
     searchURI: string = ""
-    pageInt: int = 0
     stream: FileStream
     xmlParser: XmlParser
     elementFound: bool
     fileUri, fileTags, fileName, fileHash: string = ""
   
+  ndl.session.clean()
+  
   while ndl.status == NdlRunning:
+    ndl.session.hasData = false
     searchURI = ndl.prof.api & ndl.prof.searchOpt
-    searchURI = searchURI.replace("[i]", $pageInt)
+    searchURI = searchURI.replace("[i]", $ndl.session.iPage)
     searchURI = searchURI.replace("[st]", ndl.searchTags)
+    echoInfo("Debug: Requesting $1" % searchURI)
     
-    respGet = request(client, searchURI, HttpGet)
-    if respGet.status.startsWith("200"):
-      try:
+    try:
+      respGet = request(client, searchURI, HttpGet)
+      if respGet.status.startsWith("200"):
         respFile = open(fpRespFile, fmWrite)
         respFile.writeLine(respGet.body)
         respFile.flushFile()
         respFile.close()
-      except:
-        logEvent(true, "***Error: $1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
+      else:
+        logEvent(true, "***Error: Unwanted response: $1" % respGet.status)
         return
-    else:
-      logEvent(true, "***Error: Unwanted response: $1" % respGet.status)
+    except:
+      logEvent(true, "***Error: $1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
+      ndl.chan.main[].send("smsg: Search canceled, error occured")
       return
     
     stream = newFileStream(fpRespFile, fmRead)
     if stream == nil:
       logEvent(true, "***Error: cound't open filestream")
       return
-    var hasData = false
+    
     xmlParser.open(stream, fpRespFile)
-    
-    
-    ## XML Parsing
-    while ndl.status != NdlStopped or ndl.status != NdlQuit:
-      # Good place to check on new updates
-      if ndl.update(false) != NdlRunning:
-        while ndl.update(true) != NdlQuit:
-          case ndl.status
-          of NdlStopped, NdlQuit:
-            echoInfo("*Debug: Canceling search by user request..")
-            searchCleanup(xmlParser, stream, fpRespFile)
-            return
-          of NdlRunning:
-            break
-          else:
-            discard
-      if ndl.status == NdlQuit:
-        return
-      
+    while true:
       xmlParser.next()
       case xmlParser.kind
       of xmlElementOpen, xmlElementStart:
@@ -296,7 +306,7 @@ proc search(ndl: Ndl) =
           var spFile = uri.splitFile()
           fileName = (spFile.name & spFile.ext)
           fileUri = uri
-          hasData = true
+          ndl.session.hasData = true
         elif xmlParser.attrKey == "tags":
           fileTags = xmlParser.attrValue
         elif xmlParser.attrKey == "md5":
@@ -305,30 +315,56 @@ proc search(ndl: Ndl) =
           discard
       of xmlElementEnd, xmlElementClose:
         if elementFound:
-          echoInfo("*Debug: Downloading image..")
           elementFound = false
           if ndl.option.slow:
-            sleep(1500)
+            sleep(ndl.session.iDelay)
           ndl.download(fileUri, fileName, fileTags, fileHash)
+          
+          while true:
+              case ndl.update(ndl.option.blocking)
+              of NCSave:
+                break
+              of NCSaveAs:
+                moveFile(ndl.savePath, ndl.eventArgs)
+                break
+              of NCNext:
+                removeFIle(ndl.savePath)
+                ndl.session.iDownloads -= 1
+                break
+              of NCStop, NCQuit:
+                echoInfo("Debug: Canceling search by user request..")
+                searchCleanup(xmlParser, stream, fpRespFile)
+                return
+              of NCNone:
+                break
+              else:
+                continue
+          
+      
       of xmlEof:
-        echo "xmlEof page $1" % $pageInt
+        echo "xmlEof page $1" % $ndl.session.iPage
         searchCleanup(xmlParser, stream, fpRespFile)
-        if not hasData:
-          echoInfo("*Debug: No more images found, exiting search..")
+        if not ndl.session.hasData:
+          echoInfo("Debug: No more files found in this request, exiting search..")
+          ndl.chan.dl[].send("NCStop")
+          ndl.chan.main[].send("pmsg No more files found..")
           return
-        pageInt += 1
+        ndl.session.iPage += 1
         break
       else:
-        echoInfo("*Debug: Unwanted xml parser kind: $1" % repr xmlParser.kind)
+        echoInfo("Debug: Unwanted xml parser kind: $1" % repr xmlParser.kind)
   
             
   searchCleanup(xmlParser, stream, fpRespFile)
 
 proc idle*(ndl:Ndl) =
-  while ndl.update(true) != NdlQuit:
+  while ndl.update(true) != NCQuit:
     if ndl.event == NCStart:
       ndl.search()
-      echoInfo("*Debug: Idling...")
+      if ndl.status == NdlQuit:
+        return
+    echoInfo("Worker: Waiting for new command...")
+    
 
 
 

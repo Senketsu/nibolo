@@ -14,7 +14,7 @@ proc createDefaultProfiles*() =
    cfgFile.writeLine("#   [n] for filename extracted from the link")
    cfgFile.writeLine("#   [h] for md5 hash supplied by website")
    cfgFile.writeLine("#   [t] for tags (WARNING: possibly too long filenames")
-   cfgFile.writeLine("#   Feel free to combine or not use thme at all.")
+   cfgFile.writeLine("#   Feel free to combine or not use them at all.")
    
  
    cfgFile.writeLine("[safebooru]")
@@ -24,8 +24,55 @@ proc createDefaultProfiles*() =
    cfgFile.writeLine("parseKey=\"file_url\"")
    cfgFile.writeLine("parseEle=\"post\"")
    cfgFile.writeLine("parseUriFix=\"https:[u]\"")
-   cfgFile.writeLine("custName=\"[b][h]\"")
+   cfgFile.writeLine("custName=\"[[b]]_[h]\"")
  
+ 
+   cfgFile.writeLine("[gelbooru]")
+   cfgFile.writeLine("uri=\"https://gelbooru.com/\"")
+   cfgFile.writeLine("api=\"https://gelbooru.com/index.php?page=dapi&s=post&q=index&limit=10\"")
+   cfgFile.writeLine("searchOpt=\"&pid=[i]&tags=[st]\"")
+   cfgFile.writeLine("parseKey=\"file_url\"")
+   cfgFile.writeLine("parseEle=\"post\"")
+   cfgFile.writeLine("parseUriFix=\"[u]\"")
+   cfgFile.writeLine("custName=\"\"")
+ 
+   cfgFile.writeLine("[rule34]")
+   cfgFile.writeLine("uri=\"https://rule34.xxx/\"")
+   cfgFile.writeLine("api=\"https://rule34.xxx/index.php?page=dapi&s=post&q=index&limit=10\"")
+   cfgFile.writeLine("searchOpt=\"&pid=[i]&tags=[st]\"")
+   cfgFile.writeLine("parseKey=\"file_url\"")
+   cfgFile.writeLine("parseEle=\"post\"")
+   cfgFile.writeLine("parseUriFix=\"[u]\"")
+   cfgFile.writeLine("custName=\"\"")
+ 
+   cfgFile.writeLine("[xbooru]")
+   cfgFile.writeLine("uri=\"https://xbooru.com/\"")
+   cfgFile.writeLine("api=\"https://xbooru.com/index.php?page=dapi&s=post&q=index&limit=10\"")
+   cfgFile.writeLine("searchOpt=\"&pid=[i]&tags=[st]\"")
+   cfgFile.writeLine("parseKey=\"file_url\"")
+   cfgFile.writeLine("parseEle=\"post\"")
+   cfgFile.writeLine("parseUriFix=\"[u]\"")
+   cfgFile.writeLine("custName=\"\"")
+ 
+ 
+   cfgFile.writeLine("[realbooru]")
+   cfgFile.writeLine("uri=\"https://realbooru.com/\"")
+   cfgFile.writeLine("api=\"https://realbooru.com/index.php?page=dapi&s=post&q=index&limit=10\"")
+   cfgFile.writeLine("searchOpt=\"&pid=[i]&tags=[st]\"")
+   cfgFile.writeLine("parseKey=\"file_url\"")
+   cfgFile.writeLine("parseEle=\"post\"")
+   cfgFile.writeLine("parseUriFix=\"[u]\"")
+   cfgFile.writeLine("custName=\"\"")
+ 
+ 
+   cfgFile.writeLine("[furrybooru]")
+   cfgFile.writeLine("uri=\"https://furry.booru.org/\"")
+   cfgFile.writeLine("api=\"https://furry.booru.org/index.php?page=dapi&s=post&q=index&limit=10\"")
+   cfgFile.writeLine("searchOpt=\"&pid=[i]&tags=[st]\"")
+   cfgFile.writeLine("parseKey=\"file_url\"")
+   cfgFile.writeLine("parseEle=\"post\"")
+   cfgFile.writeLine("parseUriFix=\"[u]\"")
+   cfgFile.writeLine("custName=\"\"")
  
    cfgFile.flushFile()
    cfgFile.close()
@@ -43,8 +90,8 @@ proc resetProfiles(ndl: Ndl) =
 proc profilesLoad*(ndl: Ndl): bool =
   var pathProfiles = getPath("profiles")
   var fpProfiles = newFileStream(pathProfiles, fmRead)
-  if ndl.activeProf == "":
-    ndl.activeProf = "safebooru"
+  if ndl.prof.active == "":
+    ndl.prof.active = "safebooru"
   if fpProfiles != nil:
     var cfgParser: CfgParser
     open(cfgParser, fpProfiles, pathProfiles)
@@ -56,7 +103,7 @@ proc profilesLoad*(ndl: Ndl): bool =
       of cfgEof:
         break
       of cfgSectionStart:
-        if event.section == ndl.activeProf:
+        if event.section == ndl.prof.active:
           result = true
           ndl.prof.name = event.section
           event = next(cfgParser)
@@ -76,6 +123,8 @@ proc profilesLoad*(ndl: Ndl): bool =
                 ndl.prof.parseEle = event.value
               of "parseUriFix":
                 ndl.prof.parseUriFix = event.value
+              of "custName":
+                ndl.prof.custName = event.value
               else:
                 discard
               event = next(cfgParser)
@@ -85,6 +134,15 @@ proc profilesLoad*(ndl: Ndl): bool =
         discard
       event = next(cfgParser)
     close(cfgParser)
+    case ndl.prof.custName
+    of "[n]", "":
+      ndl.nameType = NntName
+    of "[h]":
+      ndl.nameType = NntHash
+    of "[t]":
+      ndl.nameType = NntTags
+    else:
+      ndl.nameType = NntCust
   else:
     createDefaultProfiles()
     result = ndl.profilesLoad()

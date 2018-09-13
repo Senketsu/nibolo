@@ -14,3 +14,9 @@ type
     dir,name,ext: string
   TLinkData* = tuple
     url,ext,name: string
+  
+  NdlStatus* = enum
+    NdlRunning,
+    NdlPaused,
+    NdlStopped,
+    NdlQuit
