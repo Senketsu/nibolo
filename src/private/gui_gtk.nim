@@ -5,9 +5,9 @@ import projTypes
 import projUtils
 
 var
-  winMain*: gtk2.PWindow
-  chanDler*: ptr StringChannel
-  chanMain*: ptr StringChannel
+  winMain: gtk2.PWindow
+  chanDler: ptr StringChannel
+  chanMain: ptr StringChannel
   enTags: PEntry
   pwMain: PImage
   pwW, pwH: gint
@@ -18,10 +18,15 @@ var
   
  
 proc quit() =
+  while gtk2.events_pending() > 0:
+    discard gtk2.main_iteration()
   main_quit()
 
 proc requestQuit(widget: PWidget, data: Pgpointer) {.cdecl.} =
   chanDler[].send("NCQuit")
+
+proc versionCheck() =
+  chanDler[].send("NCCheckUpdates")
 
 proc dlerStart(widget: PWidget, data: Pgpointer) =
   if ndlStatus == NdlStopped:
@@ -70,7 +75,6 @@ proc imbNext(widget: PWidget, data: Pgpointer) =
     chanDler[].send("NCNext")
     imgReady = false
 
-
 proc getProfileNames*(): seq[string] =
   result = @[]
   var pathProfiles = getPath("profiles")
@@ -93,18 +97,14 @@ proc getProfileNames*(): seq[string] =
       event = next(cfgParser)
     close(cfgParser)
 
-
-
 proc changedProfile(widget: PWidget, data: Pgpointer) =
   var cb = PComboBoxText(widget)
   var active = $get_active_text(cb)
   if active != "" or active != nil:
     chanDler[].send("NCProfile $1" % active)
   
-
 proc fillProfiles(cb: PComboBoxText) =
   var profiles = getProfileNames()
-
   for i in 0..profiles.high:
     cb.insert_text(gint(i), profiles[i])
   cb.set_active(gint(0))
@@ -133,8 +133,9 @@ proc update*(data: gpointer): bool =
     case cmd
     of "pv":
       var pv = pixbuf_new_from_file_at_size(args, pwW, pwH, nil)
-      # var pv = pixbuf_new_from_file_at_size(args, 360, 340, nil)
       pwMain.set_from_pixbuf(pv)
+      if pv != nil:
+        g_object_unref(pv)
       imgReady = true
     of "NdlRunning":
       ndlStatus = NdlRunning
@@ -150,13 +151,19 @@ proc update*(data: gpointer): bool =
       btnStart.set_label("Start")
     of "NdlQuit":
       ndlStatus = NdlQuit
-      gui_gtk.quit()
+      return false
+    of "UpdatePrompt":
+      let msg = "Nibolo $1 has been released.\n\t(Your version: $2)" % [args, VERSION]
+      infoUser(winMain, DlgINFO, "Update available !", msg)
     of "smsg":
-      discard sbInfo.push(0,"Status: $1" % args)
+      discard sbInfo.push(0,"\tInfo:\t $1" % args)
     of "pmsg":
-      discard sbProg.push(0,"Info: $1" % args)
+      discard sbProg.push(0,"\tStats:\t $1" % args)
+    of "ERR":
+      infoUser(winMain, DlgERR, "Error !", args)
     else:
       discard
+
 
 proc createMainWin*(channelMain, channelDler:  ptr StringChannel) =
   var
@@ -165,13 +172,13 @@ proc createMainWin*(channelMain, channelDler:  ptr StringChannel) =
   nim_init()
   winMain = window_new(gtk2.WINDOW_TOPLEVEL)
   winMain.set_position(WIN_POS_MOUSE)
-  winMain.set_title(NAMEVER)
+  winMain.set_title(NAME)
   winMain.set_default_size(640, 370)
   discard winMain.signal_connect("destroy", SIGNAL_FUNC(gui_gtk.requestQuit), nil)
 
   var vbMain = vbox_new(false, 2)
   winMain.add(vbMain)
-  label = label_new("Nibolo | $1" % [VERSION])
+  label = label_new("Nibolo $1" % [VERSION])
   vbMain.pack_start(label, false, false, 5)
   var hbMain = hbox_new(false, 0)
   vbMain.pack_start(hbMain, true, true, 0)
@@ -219,13 +226,12 @@ proc createMainWin*(channelMain, channelDler:  ptr StringChannel) =
   btnChooser.set_tooltip_text("Pick folder where to save images.")
   hbFill.pack_start(btnChooser, false, false, 0)
   
-
   hbFill = hbox_new(true, 10)
   vbSec.pack_start(hbFill, false, false, 10)
   btnStart = button_new("Start")
   discard OBJECT(btnStart).signal_connect("clicked",
    SIGNAL_FUNC(gui_gtk.dlerStart), nil)
-  btnStart.set_tooltip_text("Starts / Resumes downloading process..")
+  btnStart.set_tooltip_text("Starts / Pauses / Resumes downloading process..")
   hbFill.pack_start(btnStart, true, true, 0)
   
   btnStop = button_new("Stop")
@@ -261,7 +267,6 @@ proc createMainWin*(channelMain, channelDler:  ptr StringChannel) =
   btOptBrowse.set_tooltip_text("You can control the downloading process with buttons bellow.")
   vbTest.pack_start(btOptBrowse, false, false, 0)
   
-
   hbFill = hbox_new(true, 0)
   vbSec.pack_start(hbFill, false, false, 20)
   var btnSave = button_new_from_stock(STOCK_SAVE)
@@ -298,10 +303,9 @@ proc createMainWin*(channelMain, channelDler:  ptr StringChannel) =
   btnQuit.set_size_request(90, 30)
   hboxBottom.pack_end(btnQuit, false, false, 20)
 
-
   chanDler = channelDler
   chanMain = channelMain
-  
+  gui_gtk.versionCheck()
   discard g_timeout_add(333, gui_gtk.update, nil)
   
   cbProf.fillProfiles()

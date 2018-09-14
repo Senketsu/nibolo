@@ -31,6 +31,9 @@ proc launch() =
     echoInfo("Quitting...")
     quit()
 
+  if not fileExists(getPath("profiles")):
+    createDefaultProfiles()
+  
   channelMain.open()
   createThread(threadMain, threadMainStart, 0)
 

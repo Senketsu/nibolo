@@ -11,11 +11,11 @@ proc yesOrNo*(window: PWindow, question: string): bool =
   ynDialog.destroy()
 
 
-proc infoUser*(window: PWindow, msgType: TDlgEnum, msg: string) =
+proc infoUser*(window: PWindow, msgType: TDlgEnum, title, msg: string) =
   var dialog = message_dialog_new(window,
       DIALOG_MODAL or DIALOG_DESTROY_WITH_PARENT,
       cast[TMessageType](int(msgType)), BUTTONS_OK, "%s", cstring(msg))
-  dialog.setTitle("Info")
+  dialog.setTitle(title)
   discard dialog.run()
   dialog.destroy()
 

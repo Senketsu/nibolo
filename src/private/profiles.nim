@@ -13,7 +13,8 @@ proc createDefaultProfiles*() =
    cfgFile.writeLine("#   [b] for booru name (as used in profile)")
    cfgFile.writeLine("#   [n] for filename extracted from the link")
    cfgFile.writeLine("#   [h] for md5 hash supplied by website")
-   cfgFile.writeLine("#   [t] for tags (WARNING: possibly too long filenames")
+   cfgFile.writeLine("#   [t] for tags (WARNING: possibly too long filenames)")
+   cfgFile.writeLine("#   [s] for searched tags")
    cfgFile.writeLine("#   Feel free to combine or not use them at all.")
    
  
@@ -24,7 +25,7 @@ proc createDefaultProfiles*() =
    cfgFile.writeLine("parseKey=\"file_url\"")
    cfgFile.writeLine("parseEle=\"post\"")
    cfgFile.writeLine("parseUriFix=\"https:[u]\"")
-   cfgFile.writeLine("custName=\"[[b]]_[h]\"")
+   cfgFile.writeLine("custName=\"[[b]] [h]\"")
  
  
    cfgFile.writeLine("[gelbooru]")
@@ -77,33 +78,36 @@ proc createDefaultProfiles*() =
    cfgFile.flushFile()
    cfgFile.close()
   else:
-   echo "no write permission ?"
+   logEvent(true, "***Error: Failed creating file:\n\t$1 ?" % getPath("profiles") )
 
 
-proc resetProfiles(ndl: Ndl) =
-  ndl.prof.name = ""
-  ndl.prof.uri = ""
-  ndl.prof.api = ""
-  ndl.prof.searchOpt = ""
-  ndl.prof.parseKey = ""
+proc clean*(prof: var NdlProfile) =
+  prof.name = ""
+  prof.uri = ""
+  prof.api = ""
+  prof.searchOpt = ""
+  prof.parseKey = ""
+  prof.parseEle = ""
+  prof.parseUriFix = ""
+  prof.custName = ""
 
-proc profilesLoad*(ndl: Ndl): bool =
+proc loadProfile*(ndl: Ndl, profileName: var string): bool =
   var pathProfiles = getPath("profiles")
   var fpProfiles = newFileStream(pathProfiles, fmRead)
-  if ndl.prof.active == "":
-    ndl.prof.active = "safebooru"
+  if profileName == "":
+    profileName = "safebooru"
   if fpProfiles != nil:
     var cfgParser: CfgParser
     open(cfgParser, fpProfiles, pathProfiles)
     var event = next(cfgParser)
-    ndl.resetProfiles()
+    ndl.prof.clean()
 
     while true:
       case event.kind
       of cfgEof:
         break
       of cfgSectionStart:
-        if event.section == ndl.prof.active:
+        if event.section == profileName:
           result = true
           ndl.prof.name = event.section
           event = next(cfgParser)
@@ -145,7 +149,7 @@ proc profilesLoad*(ndl: Ndl): bool =
       ndl.nameType = NntCust
   else:
     createDefaultProfiles()
-    result = ndl.profilesLoad()
+    result = ndl.loadProfile(profileName)
   if not result:
-    logEvent(true, "***Error: $1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
+    logEvent(true, "***Error: Couldn't load profile '$1' from file:\n\t$2" % [profileName, getPath("profiles")])
   

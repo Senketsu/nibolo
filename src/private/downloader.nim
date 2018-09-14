@@ -7,10 +7,8 @@ type
   NdlChans = tuple
     dl, main: ptr StringChannel
     buffer: string
-  
 
   NdlProfile = tuple
-    active: string
     name, uri, api: string
     searchOpt: string
     parseEle: string
@@ -25,20 +23,21 @@ type
     NntCust
 
   NdlEvent = enum
-    NCStart     = ("NCStart")
-    NCStop      = ("NCStop")
-    NCSave      = ("NCSave")
-    NCSaveAs    = ("NCSaveAs")
-    NCSaveFol   = ("NCSaveFol")
-    NCOptSlow   = ("NCOptSlow")
-    NCOptView   = ("NCOptView")
-    NCOptBrowse = ("NCOptBrowse")
-    NCProfile   = ("NCProfile")
-    NCNewTags   = ("NCNewTags")
-    NCNext      = ("NCNext")
-    NCNone      = ("NCNone")
-    NCUnkn      = ("NCUnkn")
-    NCQuit      = ("NCQuit")
+    NCStart       = ("NCStart")
+    NCStop        = ("NCStop")
+    NCSave        = ("NCSave")
+    NCSaveAs      = ("NCSaveAs")
+    NCSaveFol     = ("NCSaveFol")
+    NCOptSlow     = ("NCOptSlow")
+    NCOptView     = ("NCOptView")
+    NCOptBrowse   = ("NCOptBrowse")
+    NCProfile     = ("NCProfile")
+    NCNewTags     = ("NCNewTags")
+    NCNext        = ("NCNext")
+    NCCheckUpdates= ("NCCheckUpdates")
+    NCNone        = ("NCNone")
+    NCUnkn        = ("NCUnkn")
+    NCQuit        = ("NCQuit")
 
   NdlOpt = tuple
     slow, view, browse, blocking: bool
@@ -46,7 +45,10 @@ type
   NdlSes = tuple
     iPage, iDownloads: int
     iDuplicates, iDelay: int
+    iRetry: int
     hasData: bool
+    profile: NdlProfile
+    search, folder: string
     
   NdlObj = object
     chan: NdlChans
@@ -63,7 +65,46 @@ type
 
   Ndl* = ref NdlObj
 
+proc getNextVersionNumber(curVer: string): string =
+  var
+    vM,vS,vT: int = 0
+    split = curVer.split(".")
 
+  vM = parseInt(split[0])
+  vS = parseInt(split[1])
+  vT = parseInt(split[2])
+ 
+  inc(vT)
+  if vT > 9:
+   vT = 0
+   inc(vS)
+   if vS > 9:
+    vS = 0
+    inc(vM)
+ 
+  result = "$1.$2.$3" % [$vM,$vS,$vT]
+
+proc checkForUpdates(): tuple[available: bool, version: string] =
+  var
+   nextVer: string = ""
+   client = newHttpClient()
+   response: Response
+   version = VERSION
+  
+  while true:
+    try:
+      nextVer = getNextVersionNumber(version)
+      response = request(client, "$1/releases/tag/v$2" % [LINK, nextVer], HttpGet)
+    except:
+      logEvent(true, "***Error: $1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
+ 
+    if response.status.startsWith("200"):
+      result.available = true
+      result.version = nextVer
+      version = nextVer
+    else:
+      break
+    
 include profiles
 
 proc new*(chanDler, chanMain: ptr StringChannel): Ndl =
@@ -76,15 +117,11 @@ proc new*(chanDler, chanMain: ptr StringChannel): Ndl =
   result.eventArgs = ""
   result.searchTags = ""
   result.saveFolder = getPath("dirPic")
-  result.prof.active = ""
-  result.prof.name = ""
-  result.prof.uri = ""
-  result.prof.api = ""
-  result.prof.searchOpt = ""
-  result.prof.parseKey = ""
-  result.prof.parseEle = ""
-  result.prof.parseUriFix = ""
-  result.prof.custName = ""
+  result.savePath = ""
+  result.prof.clean()
+  result.session.profile.clean()
+  result.session.folder = ""
+  result.session.search = ""
 
 
 proc handleEvent(ndl: Ndl) =
@@ -138,11 +175,17 @@ proc handleEvent(ndl: Ndl) =
             ndl.option.browse = false
             ndl.option.blocking = (ndl.status == NdlPaused)
         of NCProfile:
-          ndl.prof.active = ndl.eventArgs
-          if not ndl.profilesLoad():
-            ndl.chan.main[].send("ERR")
+          if not ndl.loadProfile(ndl.eventArgs):
+            ndl.chan.main[].send("ERR Loading profile '$1' failed." % ndl.eventArgs)
         of NCSave, NCSaveAs, NCNext:
           discard # We handle those externally
+        of NCCheckUpdates:
+          var update = checkForUpdates()
+          if update.available:
+            ndl.chan.main[].send("UpdatePrompt " & update.version)
+            echoInfo("Debug: Update check: Newer version found")
+          else:
+            echoInfo("Debug: Update check: Running newest version")
         else:
           echoInfo("Debug: Coudn't handle event '$1'" % $ndl.event)
           discard
@@ -176,6 +219,7 @@ proc processCmd(ndl: Ndl) =
   of "NCOptSlow": ndl.event = NCOptSlow
   of "NCOptView": ndl.event = NCOptView
   of "NCOptBrowse": ndl.event = NCOptBrowse
+  of "NCCheckUpdates" : ndl.event = NCCheckUpdates
   of "NCNext": ndl.event = NCNext
   of "NCQuit": ndl.event = NCQuit
   else: ndl.event = NCUnkn
@@ -199,38 +243,46 @@ proc update(ndl: Ndl, blocking: bool = false): NdlEvent =
   return ndl.event
 
 
-proc download(ndl: Ndl, fileURI, fileName, fileTags, fileHash: string) =
+proc download(ndl: Ndl, fileURI, fileName, fileExt, fileTags, fileHash: string) =
   var
     client = newHttpClient()
   ndl.savePath = ""
 
   case ndl.nameType
   of NntName:
-    ndl.savePath = joinPath(ndl.saveFolder, fileName)
+    ndl.savePath = joinPath(ndl.session.folder, fileName & fileExt)
   of NntTags:
-    ndl.savePath = joinPath(ndl.saveFolder, fileTags)
+    ndl.savePath = joinPath(ndl.session.folder, fileTags & fileExt)
   of NntHash:
-    ndl.savePath = joinPath(ndl.saveFolder, fileHash)
+    ndl.savePath = joinPath(ndl.session.folder, fileHash & fileExt)
   of NntCust:
-    var name = ndl.prof.custName
-    name = name.replace("[b]", ndl.prof.name)
+    var name = ndl.session.profile.custName
+    name = name.replace("[b]", ndl.session.profile.name)
     name = name.replace("[h]", fileHash)
     name = name.replace("[n]", fileName)
     name = name.replace("[t]", fileTags)
-    ndl.savePath = joinPath(ndl.saveFolder, name)
+    name = name.replace("[s]", ndl.session.search)
+    name = name & fileExt
+    ndl.savePath = joinPath(ndl.session.folder, name)
+    # We don't handle stupid, not my problem if someone fucks up custom naming
   else:
-    discard
+    # Shouldn't happen, we default to NntName in profiles
+    discard 
   
   try:
-    ## TODO maybe some actual duplicate check ?
+    ## TODO maybe some actual duplicate check ? P.S: Do I care ?
     if not fileExists(ndl.savePath):
+      if ndl.option.slow:
+        sleep(ndl.session.iDelay)
       echoInfo("Debug: Downloading..\n\t$1" % [fileURI])
       client.downloadFile(fileURI, ndl.savePath)
       ndl.session.iDownloads += 1
+      ndl.chan.main[].send("pmsg Downloaded $1 files .." % $ndl.session.iDownloads)
     else:
       echoInfo("Debug: Skipped downloading duplicate file..\n\t$1" % fileURI)
       ndl.session.iDuplicates += 1
-    
+      ndl.chan.main[].send("pmsg Skipped downloading $1 files.." % $ndl.session.iDuplicates)          
+      
     if ndl.option.view or ndl.option.browse:
       ndl.chan.main[].send("pv $1" % ndl.savePath)
     
@@ -243,13 +295,16 @@ proc searchCleanup(parser: var XmlParser, stream: var FileStream, fp: string) =
   stream.close()
   removeFile(fp)
 
-
 proc clean(session: var NdlSes) =
   session.iPage = 0
   session.iDownloads = 0
   session.iDuplicates = 0
   session.iDelay = 3000
+  session.iRetry = 0
   session.hasData = false
+  session.search = ""
+  session.folder = ""
+  session.profile.clean()
 
 proc search(ndl: Ndl) =
   var
@@ -261,50 +316,67 @@ proc search(ndl: Ndl) =
     stream: FileStream
     xmlParser: XmlParser
     elementFound: bool
-    fileUri, fileTags, fileName, fileHash: string = ""
+    fileUri, fileTags, fileName, fileExt, fileHash: string = ""
   
   ndl.session.clean()
+  ndl.session.profile = ndl.prof
+  ndl.session.search = ndl.searchTags
+  ndl.session.folder = ndl.saveFolder
   
   while ndl.status == NdlRunning:
     ndl.session.hasData = false
-    searchURI = ndl.prof.api & ndl.prof.searchOpt
+    searchURI = ndl.session.profile.api & ndl.session.profile.searchOpt
     searchURI = searchURI.replace("[i]", $ndl.session.iPage)
-    searchURI = searchURI.replace("[st]", ndl.searchTags)
-    echoInfo("Debug: Requesting $1" % searchURI)
+    searchURI = searchURI.replace("[st]", ndl.session.search)
     
-    try:
-      respGet = request(client, searchURI, HttpGet)
-      if respGet.status.startsWith("200"):
-        respFile = open(fpRespFile, fmWrite)
-        respFile.writeLine(respGet.body)
-        respFile.flushFile()
-        respFile.close()
-      else:
-        logEvent(true, "***Error: Unwanted response: $1" % respGet.status)
+    while true:
+      try:
+        echoInfo("Debug: Requesting $1" % searchURI)
+        respGet = request(client, searchURI, HttpGet)
+        if respGet.status.startsWith("200"):
+          respFile = open(fpRespFile, fmWrite)
+          respFile.writeLine(respGet.body)
+          respFile.flushFile()
+          respFile.close()
+          ndl.session.iRetry = 0
+          break
+        else:
+          logEvent(true, "***Error: Unwanted response: $1" % respGet.status)
+          return
+      except ProtocolError:
+        # This should handle server burps..hopefuly (throws ProtocolError)
+        if ndl.session.iRetry >= 3:
+          ndl.chan.main[].send("smsg Search canceled, server error")     
+          return
+        ndl.session.iRetry += 1
+        ndl.chan.main[].send("smsg Server error, retrying .. $1 / 3" % $ndl.session.iRetry)
+        sleep(3000)
+        continue        
+      except:
+        logEvent(true, "***Error: $1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
+        ndl.chan.main[].send("smsg Search canceled, error occured")
         return
-    except:
-      logEvent(true, "***Error: $1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
-      ndl.chan.main[].send("smsg: Search canceled, error occured")
-      return
     
     stream = newFileStream(fpRespFile, fmRead)
     if stream == nil:
       logEvent(true, "***Error: cound't open filestream")
       return
     
+    ndl.chan.main[].send("smsg Search running..")
     xmlParser.open(stream, fpRespFile)
     while true:
       xmlParser.next()
       case xmlParser.kind
       of xmlElementOpen, xmlElementStart:
-        if cmpIgnoreCase(xmlParser.elementName, ndl.prof.parseEle) == 0:
+        if cmpIgnoreCase(xmlParser.elementName, ndl.session.profile.parseEle) == 0:
           elementFound = true
       of xmlAttribute:
-        if (xmlParser.attrKey == ndl.prof.parseKey):
+        if (xmlParser.attrKey == ndl.session.profile.parseKey):
           ## TODO: add extensions either here or in dl path construct
-          var uri = ndl.prof.parseUriFix.replace("[u]", xmlParser.attrValue)
-          var spFile = uri.splitFile()
-          fileName = (spFile.name & spFile.ext)
+          var uri = ndl.session.profile.parseUriFix.replace("[u]", xmlParser.attrValue)
+          var splitFile = uri.splitFile()
+          fileName = splitFile.name
+          fileExt = splitFile.ext
           fileUri = uri
           ndl.session.hasData = true
         elif xmlParser.attrKey == "tags":
@@ -316,9 +388,7 @@ proc search(ndl: Ndl) =
       of xmlElementEnd, xmlElementClose:
         if elementFound:
           elementFound = false
-          if ndl.option.slow:
-            sleep(ndl.session.iDelay)
-          ndl.download(fileUri, fileName, fileTags, fileHash)
+          ndl.download(fileUri, fileName, fileExt, fileTags, fileHash)
           
           while true:
               case ndl.update(ndl.option.blocking)
@@ -329,7 +399,6 @@ proc search(ndl: Ndl) =
                 break
               of NCNext:
                 removeFIle(ndl.savePath)
-                ndl.session.iDownloads -= 1
                 break
               of NCStop, NCQuit:
                 echoInfo("Debug: Canceling search by user request..")
@@ -339,10 +408,9 @@ proc search(ndl: Ndl) =
                 break
               else:
                 continue
-          
       
       of xmlEof:
-        echo "xmlEof page $1" % $ndl.session.iPage
+        echoInfo("Debug: End of page $1" % $ndl.session.iPage)
         searchCleanup(xmlParser, stream, fpRespFile)
         if not ndl.session.hasData:
           echoInfo("Debug: No more files found in this request, exiting search..")

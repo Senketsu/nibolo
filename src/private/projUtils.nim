@@ -1,15 +1,13 @@
 import os, strutils, times
 
 const
-  VERSION* = "v0.2.0-beta"
+  VERSION* = "0.1.4"
   NAME* = "nibolo"
   NAMEVER* = "$1 $2" % [NAME, VERSION]
   LINK* = "https://github.com/Senketsu/nibolo"
   TWITTER* = "https://twitter.com/Senketsu_dev"
   LICENSE* = LINK & "/blob/devel/LICENSE"
 
-
-# macro for cOut
 let
   cOut*: bool = true
   logEvents*: bool = true
@@ -19,43 +17,6 @@ let
   logMsg*: bool = false
   logAllMsg*:bool = false
 
-
-proc isNumber*(s: string): bool =
-  var i = 0
-  while s[i] in {'0'..'9'}: inc(i)
-  result = i == s.len and s.len > 0
-
-
-proc `|`*(x: int, d: int): string =
-  result = $x
-  let pad = spaces(d.abs-len(result))
-  if d >= 0:
-    result = pad & result
-  else:
-    result = result & pad
-
-
-proc `|`*(s: string, d: int): string =
-  let pad = spaces(d.abs-len(s))
-  if d >= 0:
-    result = pad & s
-  else:
-    result = s & pad
-
-
-proc `|`*(f: float, d: tuple[w,p: int]): string =
-  result = formatFloat(f, ffDecimal, d.p)
-  let pad = spaces(d.w.abs-len(result))
-  if d.w >= 0:
-    result = pad & result
-  else:
-    result = result & pad
-
-
-proc `|`*(f: float, d: int): string =
-  $f | d
-
-  
 proc getPath*(name: string): string =
   result = ""
   var
