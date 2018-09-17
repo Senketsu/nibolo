@@ -1,5 +1,5 @@
-import strutils, os, streams, httpclient, parsexml, parsecfg
-import asyncdispatch
+import strutils, os, streams, terminal
+import httpclient, parsexml, parsecfg
 import projUtils
 import projTypes
 
@@ -84,19 +84,19 @@ proc getNextVersionNumber(curVer: string): string =
  
   result = "$1.$2.$3" % [$vM,$vS,$vT]
 
-proc checkForUpdates(): tuple[available: bool, version: string] =
+proc checkForUpdates*(): tuple[available: bool, version: string] =
   var
    nextVer: string = ""
    client = newHttpClient()
    response: Response
    version = VERSION
-  
+  result.version = version
   while true:
     try:
       nextVer = getNextVersionNumber(version)
       response = request(client, "$1/releases/tag/v$2" % [LINK, nextVer], HttpGet)
     except:
-      logEvent(true, "***Error: $1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
+      error("$1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
  
     if response.status.startsWith("200"):
       result.available = true
@@ -104,7 +104,7 @@ proc checkForUpdates(): tuple[available: bool, version: string] =
       version = nextVer
     else:
       break
-    
+
 include profiles
 
 proc new*(chanDler, chanMain: ptr StringChannel): Ndl =
@@ -116,7 +116,7 @@ proc new*(chanDler, chanMain: ptr StringChannel): Ndl =
   result.event = NCNone
   result.eventArgs = ""
   result.searchTags = ""
-  result.saveFolder = getPath("dirPic")
+  result.saveFolder = getHomeDir()
   result.savePath = ""
   result.prof.clean()
   result.session.profile.clean()
@@ -125,6 +125,7 @@ proc new*(chanDler, chanMain: ptr StringChannel): Ndl =
 
 
 proc handleEvent(ndl: Ndl) =
+  try:
     if ndl.event != NCUnkn:
       case ndl.event
         of NCQuit:
@@ -154,6 +155,8 @@ proc handleEvent(ndl: Ndl) =
           ndl.chan.main[].send("smsg Search stopped..")
         
         of NCSaveFol:
+          if not existsDir(ndl.eventArgs):
+            createDir(ndl.eventArgs)
           ndl.saveFolder = ndl.eventArgs
         of NCNewTags:
           ndl.searchTags = ndl.eventArgs
@@ -183,12 +186,15 @@ proc handleEvent(ndl: Ndl) =
           var update = checkForUpdates()
           if update.available:
             ndl.chan.main[].send("UpdatePrompt " & update.version)
-            echoInfo("Debug: Update check: Newer version found")
+            debug("Update check: Newer version found")
           else:
-            echoInfo("Debug: Update check: Running newest version")
+            debug("Update check: Running newest version")
         else:
-          echoInfo("Debug: Coudn't handle event '$1'" % $ndl.event)
+          debug("Coudn't handle event '$1'" % $ndl.event)
           discard
+  except:
+    error("$1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
+
 
 proc processCmd(ndl: Ndl) =
   var
@@ -205,7 +211,7 @@ proc processCmd(ndl: Ndl) =
     ndl.eventArgs = args
     ndl.chan.buffer = ""
   except:
-    logEvent(true, "***Error: $1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
+    error("$1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
     return
   
   case cmd
@@ -274,12 +280,14 @@ proc download(ndl: Ndl, fileURI, fileName, fileExt, fileTags, fileHash: string) 
     if not fileExists(ndl.savePath):
       if ndl.option.slow:
         sleep(ndl.session.iDelay)
-      echoInfo("Debug: Downloading..\n\t$1" % [fileURI])
+      debug("Downloading..\n\t$1" % [fileURI])
+      styledWriteLine(stdout, fgGreen, "[Info]: ", resetStyle, "Downloading file:\n   $1" % fileURI)
       client.downloadFile(fileURI, ndl.savePath)
       ndl.session.iDownloads += 1
       ndl.chan.main[].send("pmsg Downloaded $1 files .." % $ndl.session.iDownloads)
     else:
-      echoInfo("Debug: Skipped downloading duplicate file..\n\t$1" % fileURI)
+      debug("Skipped downloading duplicate file..\n\t$1" % fileURI)
+      styledWriteLine(stdout, fgGreen, "[Info]: ", resetStyle, "Skipped downloading duplicate file:\n   $1" % fileURI)
       ndl.session.iDuplicates += 1
       ndl.chan.main[].send("pmsg Skipped downloading $1 files.." % $ndl.session.iDuplicates)          
       
@@ -287,7 +295,7 @@ proc download(ndl: Ndl, fileURI, fileName, fileExt, fileTags, fileHash: string) 
       ndl.chan.main[].send("pv $1" % ndl.savePath)
     
   except:
-    logEvent(true, "***Error: $1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
+    error("$1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
 
 
 proc searchCleanup(parser: var XmlParser, stream: var FileStream, fp: string) =
@@ -331,7 +339,8 @@ proc search(ndl: Ndl) =
     
     while true:
       try:
-        echoInfo("Debug: Requesting $1" % searchURI)
+        debug("Requesting..\n\t$1" % searchURI)
+        styledWriteLine(stdout, fgGreen, "[Info]: ", resetStyle, "Searching page no: $1 ..." % $ndl.session.iPage)
         respGet = request(client, searchURI, HttpGet)
         if respGet.status.startsWith("200"):
           respFile = open(fpRespFile, fmWrite)
@@ -341,25 +350,27 @@ proc search(ndl: Ndl) =
           ndl.session.iRetry = 0
           break
         else:
-          logEvent(true, "***Error: Unwanted response: $1" % respGet.status)
+          error("Unwanted response: $1" % respGet.status)
           return
       except ProtocolError:
         # This should handle server burps..hopefuly (throws ProtocolError)
         if ndl.session.iRetry >= 3:
           ndl.chan.main[].send("smsg Search canceled, server error")     
+          error("$1: retrying 3 times failed..\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
           return
         ndl.session.iRetry += 1
         ndl.chan.main[].send("smsg Server error, retrying .. $1 / 3" % $ndl.session.iRetry)
+        styledWriteLine(stdout, fgYellow, "[Warning]: ", resetStyle, "Server error, retrying .. $1 / 3" % $ndl.session.iRetry)
         sleep(3000)
         continue        
       except:
-        logEvent(true, "***Error: $1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
+        error("$1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
         ndl.chan.main[].send("smsg Search canceled, error occured")
         return
     
     stream = newFileStream(fpRespFile, fmRead)
     if stream == nil:
-      logEvent(true, "***Error: cound't open filestream")
+      error("Cound't open filestream\n\t$1" % fpRespFile)
       return
     
     ndl.chan.main[].send("smsg Search running..")
@@ -401,7 +412,8 @@ proc search(ndl: Ndl) =
                 removeFIle(ndl.savePath)
                 break
               of NCStop, NCQuit:
-                echoInfo("Debug: Canceling search by user request..")
+                debug("Canceling search by user request..")
+                styledWriteLine(stdout, fgGreen, "[Info]: ", resetStyle, "Canceling search..")
                 searchCleanup(xmlParser, stream, fpRespFile)
                 return
               of NCNone:
@@ -410,17 +422,18 @@ proc search(ndl: Ndl) =
                 continue
       
       of xmlEof:
-        echoInfo("Debug: End of page $1" % $ndl.session.iPage)
+        debug("End of page $1" % $ndl.session.iPage)
         searchCleanup(xmlParser, stream, fpRespFile)
         if not ndl.session.hasData:
-          echoInfo("Debug: No more files found in this request, exiting search..")
+          debug("No more files found in this request, exiting search..")
+          styledWriteLine(stdout, fgGreen, "[Info]: ", resetStyle, "No more files found. Search finished.")
           ndl.chan.dl[].send("NCStop")
           ndl.chan.main[].send("pmsg No more files found..")
           return
         ndl.session.iPage += 1
         break
       else:
-        echoInfo("Debug: Unwanted xml parser kind: $1" % repr xmlParser.kind)
+        debug("Unwanted xml parser kind: $1" % repr xmlParser.kind)
   
             
   searchCleanup(xmlParser, stream, fpRespFile)
@@ -431,7 +444,6 @@ proc idle*(ndl:Ndl) =
       ndl.search()
       if ndl.status == NdlQuit:
         return
-    echoInfo("Worker: Waiting for new command...")
     
 
 

@@ -91,7 +91,7 @@ proc getProfileNames*(): seq[string] =
       of cfgSectionStart:
         result.add(event.section)
       of cfgError:
-        logEvent(true, "***Error: $1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
+        error("$1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
       else:
         discard
       event = next(cfgParser)
@@ -129,7 +129,7 @@ proc update*(data: gpointer): bool =
           args.add(" ")
       args.delete(args.len, args.len)
     except:
-      logEvent(true, "***Error: $1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
+      error("$1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
     case cmd
     of "pv":
       var pv = pixbuf_new_from_file_at_size(args, pwW, pwH, nil)

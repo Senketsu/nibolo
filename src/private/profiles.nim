@@ -78,7 +78,7 @@ proc createDefaultProfiles*() =
    cfgFile.flushFile()
    cfgFile.close()
   else:
-   logEvent(true, "***Error: Failed creating file:\n\t$1 ?" % getPath("profiles") )
+   error("Failed creating file:\n\t$1 ?" % getPath("profiles") )
 
 
 proc clean*(prof: var NdlProfile) =
@@ -133,7 +133,7 @@ proc loadProfile*(ndl: Ndl, profileName: var string): bool =
                 discard
               event = next(cfgParser)
       of cfgError:
-        logEvent(true, "***Error: $1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
+        error("$1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
       else:
         discard
       event = next(cfgParser)
@@ -151,5 +151,5 @@ proc loadProfile*(ndl: Ndl, profileName: var string): bool =
     createDefaultProfiles()
     result = ndl.loadProfile(profileName)
   if not result:
-    logEvent(true, "***Error: Couldn't load profile '$1' from file:\n\t$2" % [profileName, getPath("profiles")])
+    error("Couldn't load profile '$1' from file:\n\t$2" % [profileName, getPath("profiles")])
   

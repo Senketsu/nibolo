@@ -1,21 +1,19 @@
 import os, strutils, times
+import logging
+export logging
 
 const
   VERSION* = "0.1.4"
   NAME* = "nibolo"
+  LONGNAME* = "Nim Booru Loader"
   NAMEVER* = "$1 $2" % [NAME, VERSION]
-  LINK* = "https://github.com/Senketsu/nibolo"
+  LINK* = "https://github.com/Senketsu/" & NAME
   TWITTER* = "https://twitter.com/Senketsu_dev"
   LICENSE* = LINK & "/blob/devel/LICENSE"
 
-let
-  cOut*: bool = true
-  logEvents*: bool = true
-  logError*: bool = true
-  logDebug*: bool = false
-  logPM*: bool = false
-  logMsg*: bool = false
-  logAllMsg*:bool = false
+  dbugStrDefault* = "[$levelname]: "
+  dbugStrVerbose* = "$levelid [$date] ($time): "
+
 
 proc getPath*(name: string): string =
   result = ""
@@ -42,90 +40,19 @@ proc getPath*(name: string): string =
   else:
     discard
 
-proc echoInfo*(msg: string) =
-  var
-    isWorker,isMain,isManager,isDebug,isUnk,isPrompt: bool = false
 
-  if msg.startsWith("Worker"):
-    isWorker = true
-  elif msg.startsWith("Main"):
-    isMain = true
-  elif msg.startsWith("Manager"):
-    isManager = true
-  elif msg.startsWith("Debug"):
-    isDebug = true
-  elif msg[0] == '*':
-    isPrompt = true
+proc createLoggers*() =
+  when not defined(release):
+    var dcLogger = newConsoleLogger(lvlAll, fmtStr = dbugStrDefault)
+    addHandler(dcLogger)
+    var dfLogger = newFileLogger(joinPath(getPath("dirLog"), "Debug.log"), levelThreshold =lvlDebug, fmtStr = dbugStrVerbose)
+    addHandler(dfLogger)
   else:
-    isUnk = true
-
-  when defined(Windows):
-    stdout.writeLine("[Info]: $1" % msg)
-  else:
-    if cOut:
-      if isManager:
-        stdout.writeLine("[Info]: \27[0;35m$1\27[0m" % [msg])
-      elif isMain:
-        stdout.writeLine("[Info]: \27[0;94m$1\27[0m" % [msg])
-      elif isWorker:
-        stdout.writeLine("[Info]: \27[0;95m$1\27[0m" % [msg])
-      elif isDebug:
-        stdout.writeLine("[Info]: \27[0;92m$1\27[0m" % [msg])
-      elif isPrompt:
-        stdout.writeLine("\27[0;96m$1\27[0m" % [msg])
-      else:
-        stdout.writeLine("[Info]: \27[0;93m$1\27[0m" % msg)
-    else:
-      stdout.writeLine("[Info]: $1" % msg)
-
-
-proc logEvent*(logThis: bool, msg: string) =
-  var
-    isError,isDebug,isWarn,isNotice,isUnk: bool = false
-    fileName: string = ""
-    logPath: string = getPath("dirLog")
-
-  if msg.startsWith("***Error"):
-    isError = true
-    fileName = "Error.log"
-  elif msg.startsWith("*Notice"):
-    isNotice = true
-  elif msg.startsWith("**Warning"):
-    isWarn = true
-    fileName = "Error.log"
-  elif msg.startsWith("*Debug"):
-    isDebug = true
-    fileName = "Debug.log"
-  else:
-    isUnk = true
-
-  if cOut:
-    if isError:
-      stdout.writeLine("\27[1;31m$1\27[0m" % [msg])
-    elif isNotice:
-      stdout.writeLine("\27[0;34m$1\27[0m" % [msg])
-    elif isWarn:
-      stdout.writeLine("\27[0;33m$1\27[0m" % [msg])
-    elif isDebug:
-      stdout.writeLine("\27[0;32m$1\27[0m" % [msg])
-    else:
-      stdout.writeLine(msg)
-  else:
-    stdout.writeLine(msg)
-
-  if logEvents and logThis and not isUnk: # TODO finish after config
-    var
-      tStamp: string = ""
-      iTimeNow: int = (int)getTime()
-    let timeNewTrackWhen = utc(fromUnix(iTimeNow))
-    tStamp = format(timeNewTrackWhen,"[yyyy-MM-dd] (HH:mm:ss)")
-
-    var eventFile: File
-    if isError or isDebug or isWarn:
-      if eventFile.open(joinPath(logPath,fileName) ,fmAppend):
-        eventFile.writeLine("$1: $2" % [tStamp,msg])
-        eventFile.flushFile()
-        eventFile.close()
+    var cLogger = newConsoleLogger(lvlWarn, fmtStr = dbugStrDefault)
+    addHandler(cLogger)
+  
+  var efLogger = newFileLogger(joinPath(getPath("dirLog"), "Error.log"), levelThreshold = lvlWarn, fmtStr = dbugStrVerbose)
+  addHandler(efLogger)
 
 
 proc checkDirectories*(): bool =
@@ -139,6 +66,6 @@ proc checkDirectories*(): bool =
     if not existsDir(projUtils.getPath("dirLog")):
       createDir(projUtils.getPath("dirLog"))
   except:
-    logEvent(true, "***Error: $1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
+    error("$1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
   result = true
 
