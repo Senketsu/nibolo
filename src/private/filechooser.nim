@@ -128,20 +128,3 @@ proc pfcOpen*(window: PWindow, mode: PfcMode, root: string = ""): seq[string] =
         uriList = uriList.next
       free(uriList)
   dialog.destroy()
-
-proc pfcStart*(widget: PWidget, data: Pgpointer){.procvar.} =
-  var
-    mode: PfcMode = cast[PfcMode](data)
-  let filePaths = pfcOpen(WINDOW(nil), mode)
-  if filePaths != @[]:
-    case mode
-    of PfcSelect:
-      discard
-    of PfcFolder:
-      var spPath = splitPath(filePaths[0])
-      BUTTON(widget).set_label(spPath[1])
-      BUTTON(widget).set_tooltip_text(filePaths[0])
-      chanDler[].send("NCSaveFol $1" % filePaths[0])
-    of PfcSave:
-      discard
-    else: discard

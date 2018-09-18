@@ -12,10 +12,11 @@ var
   pwMain: PImage
   pwW, pwH: gint
   sbProg, sbInfo: PStatusbar
-  btnStart, btnStop: PButton
+  btnStart, btnStop, btnChooser: PButton
   imgReady: bool
   ndlStatus: NdlStatus = NdlStopped
-  
+  cbProf: PComboBoxText
+  btOptShow,btOptSlow,btOptBrowse: PCheckButton
  
 proc quit() =
   while gtk2.events_pending() > 0:
@@ -39,24 +40,26 @@ proc dlerStop(widget: PWidget, data: Pgpointer) =
   chanDler[].send("NCStop")
 
 proc togglePreview(widget: PWidget, data: Pgpointer) =
-  let
-    btn = CHECK_BUTTON(widget)
-    active = get_active(btn)
+  let active = get_active(btOptShow)
   chanDler[].send("NCOptView $1" % $active)
 
 proc toggleSlowmode(widget: PWidget, data: Pgpointer) =
-  let
-    btn = CHECK_BUTTON(widget)
-    active = get_active(btn)
+  let active = get_active(btOptSlow)
   chanDler[].send("NCOptSlow $1" % $active)
 
 proc toggleBrowser(widget: PWidget, data: Pgpointer) =
-  let
-    btn = CHECK_BUTTON(widget)
-    active = get_active(btn)
+  let active = get_active(btOptBrowse)
   chanDler[].send("NCOptBrowse $1" % $active)
 
 include filechooser
+
+proc chooseFolder(widget: PWidget, data: Pgpointer) =
+  let paths = winMain.pfcOpen(PfcFolder)
+  if paths != @[]:
+    var spPath = splitPath(paths[0])
+    btnChooser.set_label(spPath[1])
+    btnChooser.set_tooltip_text(paths[0])
+    chanDler[].send("NCSaveFol $1" % paths[0])
 
 proc imbSave(widget: PWidget, data: Pgpointer) =
   if imgReady:
@@ -97,17 +100,16 @@ proc getProfileNames*(): seq[string] =
       event = next(cfgParser)
     close(cfgParser)
 
-proc changedProfile(widget: PWidget, data: Pgpointer) =
-  var cb = PComboBoxText(widget)
-  var active = $get_active_text(cb)
+proc changedProfile(widget: PComboBox, data: gpointer) =
+  var active = $get_active_text(cbProf)
   if active != "" or active != nil:
     chanDler[].send("NCProfile $1" % active)
   
 proc fillProfiles(cb: PComboBoxText) =
   var profiles = getProfileNames()
   for i in 0..profiles.high:
-    cb.insert_text(gint(i), profiles[i])
-  cb.set_active(gint(0))
+    cbProf.insert_text(gint(i), profiles[i])
+  set_active(PComboBox(cbProf), gint(0))
 
 proc getWidgetDimension(widget: PWidget, allocation: PRectangle) =
   pwW = pwMain.allocation.width
@@ -174,7 +176,7 @@ proc createMainWin*(channelMain, channelDler:  ptr StringChannel) =
   winMain.set_position(WIN_POS_MOUSE)
   winMain.set_title(NAME)
   winMain.set_default_size(640, 370)
-  discard winMain.signal_connect("destroy", SIGNAL_FUNC(gui_gtk.requestQuit), nil)
+  discard winMain.g_signal_connect("destroy", G_CALLBACK(gui_gtk.requestQuit), nil)
 
   var vbMain = vbox_new(false, 2)
   winMain.add(vbMain)
@@ -193,11 +195,11 @@ proc createMainWin*(channelMain, channelDler:  ptr StringChannel) =
   label.set_size_request(100, -1)
   hbFill.pack_start(label, false, false, 10)
 
-  var cbProf = combo_box_text_new()
+  cbProf = combo_box_text_new()
   cbProf.set_size_request(200, -1)
   cbProf.set_tooltip_text("List of available sites to download from.")
-  discard OBJECT(cbProf).signal_connect("changed",
-   SIGNAL_FUNC(gui_gtk.changedProfile), nil)
+  discard OBJECT(cbProf).g_signal_connect("changed",
+   G_CALLBACK(gui_gtk.changedProfile), nil)
   hbFill.pack_start(cbProf, false, false, 0)
 
   hbFill = hbox_new(false, 0)
@@ -219,9 +221,9 @@ proc createMainWin*(channelMain, channelDler:  ptr StringChannel) =
   label.set_tooltip_text("Folder used to save found images")
   hbFill.pack_start(label, false, false, 10)
 
-  var btnChooser = button_new("Choose Folder")
-  discard OBJECT(btnChooser).signal_connect("clicked",
-   SIGNAL_FUNC(pfcStart), cast[pointer](PfcFolder))
+  btnChooser = button_new("Choose Folder")
+  discard OBJECT(btnChooser).g_signal_connect("clicked",
+   G_CALLBACK(chooseFolder), nil)
   btnChooser.set_size_request(200, -1)
   btnChooser.set_tooltip_text("Pick folder where to save images.")
   hbFill.pack_start(btnChooser, false, false, 0)
@@ -229,14 +231,14 @@ proc createMainWin*(channelMain, channelDler:  ptr StringChannel) =
   hbFill = hbox_new(true, 10)
   vbSec.pack_start(hbFill, false, false, 10)
   btnStart = button_new("Start")
-  discard OBJECT(btnStart).signal_connect("clicked",
-   SIGNAL_FUNC(gui_gtk.dlerStart), nil)
+  discard OBJECT(btnStart).g_signal_connect("clicked",
+   G_CALLBACK(gui_gtk.dlerStart), nil)
   btnStart.set_tooltip_text("Starts / Pauses / Resumes downloading process..")
   hbFill.pack_start(btnStart, true, true, 0)
   
   btnStop = button_new("Stop")
-  discard OBJECT(btnStop).signal_connect("clicked",
-   SIGNAL_FUNC(gui_gtk.dlerStop), nil)
+  discard OBJECT(btnStop).g_signal_connect("clicked",
+   G_CALLBACK(gui_gtk.dlerStop), nil)
   btnStop.set_tooltip_text("Stops the downloading process..")
   hbFill.pack_start(btnStop, true, true, 0)
 
@@ -251,46 +253,46 @@ proc createMainWin*(channelMain, channelDler:  ptr StringChannel) =
   var vbTest = vbox_new(false, 5)
   vbSec.pack_start(vbTest, false, false, 0)
   
-  var btOptShow = check_button_new("Show image preview")
-  discard OBJECT(btOptShow).signal_connect("toggled",
-   SIGNAL_FUNC(gui_gtk.togglePreview), nil)
+  btOptShow = check_button_new("Show image preview")
+  discard OBJECT(btOptShow).g_signal_connect("toggled",
+   G_CALLBACK(gui_gtk.togglePreview), nil)
   btOptShow.set_tooltip_text("Whether to show a prieview of downloaded image.")
   vbTest.pack_start(btOptShow, false, false, 0)
-  var btOptSlow = check_button_new("Slower request mode")
-  discard OBJECT(btOptSlow).signal_connect("toggled",
-   SIGNAL_FUNC(gui_gtk.toggleSlowmode), nil)
+  btOptSlow = check_button_new("Slower request mode")
+  discard OBJECT(btOptSlow).g_signal_connect("toggled",
+   G_CALLBACK(gui_gtk.toggleSlowmode), nil)
   btOptSlow.set_tooltip_text("Gives the server a room to breathe.")
   vbTest.pack_start(btOptSlow, false, false, 0)
-  var btOptBrowse = check_button_new("Interactive mode")
-  discard OBJECT(btOptBrowse).signal_connect("toggled",
-   SIGNAL_FUNC(gui_gtk.toggleBrowser), btOptShow)
+  btOptBrowse = check_button_new("Interactive mode")
+  discard OBJECT(btOptBrowse).g_signal_connect("toggled",
+   G_CALLBACK(gui_gtk.toggleBrowser), btOptShow)
   btOptBrowse.set_tooltip_text("You can control the downloading process with buttons bellow.")
   vbTest.pack_start(btOptBrowse, false, false, 0)
   
   hbFill = hbox_new(true, 0)
   vbSec.pack_start(hbFill, false, false, 20)
   var btnSave = button_new_from_stock(STOCK_SAVE)
-  discard OBJECT(btnSave).signal_connect("clicked",
-   SIGNAL_FUNC(gui_gtk.imbSave), nil)
+  discard OBJECT(btnSave).g_signal_connect("clicked",
+   G_CALLBACK(gui_gtk.imbSave), nil)
   btnSave.set_tooltip_text("Saves file as is.")
   hbFill.pack_start(btnSave, true, true, 0)
 
   var btnSaveAs = button_new_from_stock(STOCK_SAVE_AS)
-  discard OBJECT(btnSaveAs).signal_connect("clicked",
-   SIGNAL_FUNC(gui_gtk.imbSaveAs), nil)
+  discard OBJECT(btnSaveAs).g_signal_connect("clicked",
+   G_CALLBACK(gui_gtk.imbSaveAs), nil)
   btnSaveAs.set_tooltip_text("Saves file with custom name..duh!")
   hbFill.pack_start(btnSaveAs, true, true, 0)
 
   var btnNext = button_new_from_stock(STOCK_MEDIA_NEXT)
-  discard OBJECT(btnNext).signal_connect("clicked",
-   SIGNAL_FUNC(gui_gtk.imbNext), nil)
+  discard OBJECT(btnNext).g_signal_connect("clicked",
+   G_CALLBACK(gui_gtk.imbNext), nil)
   btnNext.set_tooltip_text("Skip to next image..")
   hbFill.pack_start(btnNext, true, true, 0)
   
   pwMain = image_new()
   pwMain.set_tooltip_text("The looking glass into your tastes..")
-  discard pwMain.signal_connect("size-allocate",
-    SIGNAL_FUNC(gui_gtk.getWidgetDimension), nil)
+  discard pwMain.g_signal_connect("size-allocate",
+    G_CALLBACK(gui_gtk.getWidgetDimension), nil)
   hbMain.pack_start(pwMain, true, true, 0)
 
   var hboxBottom = hbox_new(false, 10)
@@ -298,8 +300,8 @@ proc createMainWin*(channelMain, channelDler:  ptr StringChannel) =
   hboxBottom.set_size_request(-1, 30)
 
   var btnQuit = button_new("Quit")
-  discard OBJECT(btnQuit).signal_connect("clicked",
-   SIGNAL_FUNC(gui_gtk.requestQuit), nil)
+  discard OBJECT(btnQuit).g_signal_connect("clicked",
+   G_CALLBACK(gui_gtk.requestQuit), nil)
   btnQuit.set_size_request(90, 30)
   hboxBottom.pack_end(btnQuit, false, false, 20)
 
