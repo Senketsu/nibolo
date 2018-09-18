@@ -24,7 +24,9 @@ proc pfcUpdate(widget: PWidget, data: Pgpointer) =
   var dialog = FILE_CHOOSER(widget)
   var pvPath: cstring
   when defined(windows): # cause lib we use forgets about the other proc
-    pvPath = g_filename_from_uri(get_preview_uri(dialog),nil, nil)
+    var uri = get_preview_uri(dialog)
+    if uri != nil:
+      pvPath = g_filename_from_uri(uri, nil, nil)
   else:
     pvPath = get_preview_filename(dialog)
   if pvPath == nil or pvPath == "":
@@ -81,15 +83,6 @@ proc pfcCreateSelect(window: PWindow, curDir: string = ""): PFileChooser =
   discard result.g_signal_connect("update-preview",
    G_CALLBACK(gui_gtk.pfcUpdate), nil)
 
-
-proc pfcCreateSelectWin(window: PWindow, curDir: string = ""): PFileChooser =
-  result = file_chooser_dialog_new("Select file(s)", window,
-    FILE_CHOOSER_ACTION_OPEN,
-    "Cancel", RESPONSE_CANCEL,
-    "Select", RESPONSE_ACCEPT, nil)
-  result.set_select_multiple(true)
-  discard result.set_current_folder_uri(getHomeDir())
-
 proc pfcCreateFolder(window: PWindow, curDir: string = ""): PFileChooser =
   result = file_chooser_dialog_new("Select folder", window,
     FILE_CHOOSER_ACTION_SELECT_FOLDER,
@@ -109,10 +102,7 @@ proc pfcOpen*(window: PWindow, mode: PfcMode, root: string = ""): seq[string] =
   var dialog: PFileChooser
   case mode
   of PfcSelect:
-    when defined(windows):
-      dialog = pfcCreateSelectWin(window)
-    else:
-      dialog = pfcCreateSelect(window)
+    dialog = pfcCreateSelect(window)
   of PfcFolder:
     dialog = pfcCreateFolder(window)
   of PfcSave:

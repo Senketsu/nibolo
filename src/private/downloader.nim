@@ -439,6 +439,7 @@ proc search(ndl: Ndl) =
   searchCleanup(xmlParser, stream, fpRespFile)
 
 proc idle*(ndl:Ndl) =
+  discard ndl.loadProfile("safebooru")
   while ndl.update(true) != NCQuit:
     if ndl.event == NCStart:
       ndl.search()

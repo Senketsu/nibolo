@@ -91,11 +91,12 @@ proc clean*(prof: var NdlProfile) =
   prof.parseUriFix = ""
   prof.custName = ""
 
-proc loadProfile*(ndl: Ndl, profileName: var string): bool =
+proc loadProfile*(ndl: Ndl, profile: string = ""): bool =
   var pathProfiles = getPath("profiles")
   var fpProfiles = newFileStream(pathProfiles, fmRead)
-  if profileName == "":
-    profileName = "safebooru"
+  var loadProf = profile
+  if loadProf == "":
+    loadProf = "safebooru"
   if fpProfiles != nil:
     var cfgParser: CfgParser
     open(cfgParser, fpProfiles, pathProfiles)
@@ -107,7 +108,7 @@ proc loadProfile*(ndl: Ndl, profileName: var string): bool =
       of cfgEof:
         break
       of cfgSectionStart:
-        if event.section == profileName:
+        if event.section == loadProf:
           result = true
           ndl.prof.name = event.section
           event = next(cfgParser)
@@ -149,7 +150,7 @@ proc loadProfile*(ndl: Ndl, profileName: var string): bool =
       ndl.nameType = NntCust
   else:
     createDefaultProfiles()
-    result = ndl.loadProfile(profileName)
+    result = ndl.loadProfile(loadProf)
   if not result:
-    error("Couldn't load profile '$1' from file:\n\t$2" % [profileName, getPath("profiles")])
+    error("Couldn't load profile '$1' from file:\n\t$2" % [loadProf, getPath("profiles")])
   
