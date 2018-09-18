@@ -151,7 +151,7 @@ proc update*(data: gpointer): bool =
       btnStart.set_label("Start")
     of "NdlQuit":
       ndlStatus = NdlQuit
-      return false
+      quit(0)
     of "UpdatePrompt":
       let msg = "Nibolo $1 has been released.\n\t(Your version: $2)" % [args, VERSION]
       infoUser(winMain, DlgINFO, "Update available !", msg)

@@ -60,15 +60,14 @@ proc threadMainStart(threadID: int) {.thread.} =
   debug("End of thread main")
 
 proc launch() =
-  projUtils.createLoggers()
   var iArgs: int = paramCount()
   if not checkDirectories():
-    notice("Couldn't create config directories !\nQuitting...")
     quit()
 
   if not fileExists(getPath("profiles")):
     createDefaultProfiles()
   
+  projUtils.createLoggers()
   if iArgs > 0:
     # Open channel to queue up commands
     setControlCHook(handleAbort)

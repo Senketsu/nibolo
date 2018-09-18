@@ -6,7 +6,6 @@ Exec=nibolo
 Terminal=false
 Type=Application
 StartupNotify=false
-Icon=nibolo.png
 Categories=Application;Network;
 Name[en_US]=Nibolo
 Comment[en_US]=Nim Booru Loader

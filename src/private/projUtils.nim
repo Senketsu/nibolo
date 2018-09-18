@@ -66,6 +66,6 @@ proc checkDirectories*(): bool =
     if not existsDir(projUtils.getPath("dirLog")):
       createDir(projUtils.getPath("dirLog"))
   except:
-    error("$1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
+    echo("$1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
   result = true
 
