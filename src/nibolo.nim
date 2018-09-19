@@ -1,5 +1,4 @@
 import os, parseopt, strutils, terminal
-import asyncdispatch
 import private/projTypes
 import private/projUtils
 import private/gui_gtk
@@ -68,10 +67,10 @@ proc launch() =
     createDefaultProfiles()
   
   projUtils.createLoggers()
+  addQuitProc(resetAttributes)
   if iArgs > 0:
     # Open channel to queue up commands
     setControlCHook(handleAbort)
-    addQuitProc(resetAttributes)
     channelDler.open()
     channelMain.open()
     for kind, key, val in getopt():
@@ -113,5 +112,6 @@ proc launch() =
 
     channelMain.close()
     channelDler.close()
+    quit(0)
 
 when isMainModule: nibolo.launch()
