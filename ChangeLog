@@ -1,3 +1,9 @@
+*** 2018-09-19 Senketsu <Senketsu@cock.li> Nibolo version 0.1.4
+* Complete rewrite.
+* Add: Ability to use nibolo as cli or gui tool.
+* Fix: Search now uses API that didn't exist in 2015 instead monstrosity parser
+* Rem: New versions downloader and profile downloader.
+*
 *** 2015-09-19 Senketsu <Senketsu@cock.li> Nibolo version 0.1.3
 * Add: Threading
 * Add: Fixed nim's modules for threading support

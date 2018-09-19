@@ -14,19 +14,20 @@ A little old crappy tool revived because I don't value my time enough..
 
 ### Compiling:
 ------------------------
-**Requirements for compiling manualy**  
+Make sure you have the gtk2 wrappers installed by nimble:  
 `nimble install gtk2`  
+Compile with:  
 `nim c --threads:on -d:ssl -d:release nibolo.nim`  
-On Windows you might want to add --app:gui to hide console when launching the gui.  
+On Windows you might want to add `--app:gui` to hide console.  
 
 ### Runtime depends:
 ------------------------
 You will need GTK2 runtime library and Open SSL  
-On most linux systems those two are probably already installed or you can use your package manager to install them.  
-** Windows **  
-For 32 bit, please use either msys to install your GTK 2 runtime or download nibolo with gtk packed inside.  
-Any other runtime libraries are very likely either outdated or buggy af.  
-For 64 bit, there is well maintained repository on github linked below where you can grab installers.  
-* **32bit** [MSYS2](http://www.msys2.org/)
+  
+**Linux**  
+Use your distros package manager to install gtk2 and/or openssl.  
+**Windows**  
+*Note: you can alternatively use [MSYS2](http://www.msys2.org/) to install gtk runtime* 
+* **32bit** [GTK2 Runtime 32bit](http://downloads.sourceforge.net/gtk-win/gtk2-runtime-2.24.10-2012-10-10-ash.exe?download)
 * **64bit** [GTK2 Runtime 64bit](https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer/releases)
-* **OpenSSL** is packed in every installer of nibolo
+* **OpenSSL** is packed in every installer of nibolo or can be downloaded from [Nim](https://nim-lang.org/install_windows.html)'s website
