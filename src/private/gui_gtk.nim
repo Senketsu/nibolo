@@ -32,7 +32,7 @@ proc versionCheck() =
 proc dlerStart(widget: PWidget, data: Pgpointer) =
   if ndlStatus == NdlStopped:
     var tags = $get_text(enTags)
-    if tags != nil:
+    if tags.len > 0:
       chanDler[].send("NCNewTags $1" % tags)
   chanDler[].send("NCStart")
   
@@ -102,7 +102,7 @@ proc getProfileNames*(): seq[string] =
 
 proc changedProfile(widget: PComboBox, data: gpointer) =
   var active = $get_active_text(cbProf)
-  if active != "" or active != nil:
+  if active.len > 0:
     chanDler[].send("NCProfile $1" % active)
   
 proc fillProfiles(cb: PComboBoxText) =
@@ -117,55 +117,59 @@ proc getWidgetDimension(widget: PWidget, allocation: PRectangle) =
 
 proc update*(data: gpointer): bool =
   result = true
-  var buff = chanMain[].tryRecv()
-  if buff.dataAvailable:
-    var
-      cmd = buff.msg
-      args = ""
-    try:
-      var splitCMD = buff.msg.split(" ")
-      for i in 0..splitCMD.high:
-        if i == 0: cmd = splitCMD[i]
-        if i > 0:
-          args.add(splitCMD[i])
-          args.add(" ")
-      args.delete(args.len, args.len)
-    except:
-      error("$1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
-    case cmd
-    of "pv":
-      var pv = pixbuf_new_from_file_at_size(args, pwW, pwH, nil)
-      pwMain.set_from_pixbuf(pv)
-      if pv != nil:
-        g_object_unref(pv)
-      imgReady = true
-    of "NdlRunning":
-      ndlStatus = NdlRunning
-      btnStart.set_relief(RELIEF_HALF)
-      btnStart.set_label("Pause")
-    of "NdlPaused":
-      ndlStatus = NdlPaused
-      btnStart.set_relief(RELIEF_HALF)
-      btnStart.set_label("Resume")
-    of "NdlStopped":
-      ndlStatus = NdlStopped
-      btnStart.set_relief(RELIEF_NORMAL)
-      btnStart.set_label("Start")
-    of "NdlQuit":
-      ndlStatus = NdlQuit
-      gui_gtk.quit()
-    of "UpdatePrompt":
-      let msg = "Nibolo $1 has been released.\n\t(Your version: $2)" % [args, VERSION]
-      infoUser(winMain, DlgINFO, "Update available !", msg)
-    of "smsg":
-      discard sbInfo.push(0,"\tInfo:\t $1" % args)
-    of "pmsg":
-      discard sbProg.push(0,"\tStats:\t $1" % args)
-    of "ERR":
-      infoUser(winMain, DlgERR, "Error !", args)
+  while true:
+    var buff = chanMain[].tryRecv()
+    if buff.dataAvailable:
+      var
+        cmd = buff.msg
+        args = ""
+      try:
+        var splitCMD = buff.msg.split(" ")
+        for i in 0..splitCMD.high:
+          if i == 0: cmd = splitCMD[i]
+          if i > 0:
+            args.add(splitCMD[i])
+            args.add(" ")
+        args.delete(args.len, args.len)
+      except:
+        error("$1\n$2" % [getCurrentExceptionMsg(), repr getCurrentException()])
+      case cmd
+      of "pv":
+        var pv = pixbuf_new_from_file_at_size(args, pwW, pwH, nil)
+        pwMain.set_from_pixbuf(pv)
+        if pv != nil:
+          g_object_unref(pv)
+        imgReady = true
+      of "NdlRunning":
+        ndlStatus = NdlRunning
+        btnStart.set_relief(RELIEF_HALF)
+        btnStart.set_label("Pause")
+      of "NdlPaused":
+        ndlStatus = NdlPaused
+        btnStart.set_relief(RELIEF_HALF)
+        btnStart.set_label("Resume")
+      of "NdlStopped":
+        ndlStatus = NdlStopped
+        btnStart.set_relief(RELIEF_NORMAL)
+        btnStart.set_label("Start")
+      of "NdlQuit":
+        ndlStatus = NdlQuit
+        gui_gtk.quit()
+      of "UpdatePrompt":
+        let msg = "Nibolo $1 has been released.\n\t(Your version: $2)" % [args, VERSION]
+        infoUser(winMain, DlgINFO, "Update available !", msg)
+      of "smsg":
+        discard sbInfo.push(0,"\tInfo:\t $1" % args)
+      of "pmsg":
+        discard sbProg.push(0,"\tStats:\t $1" % args)
+      of "ERR":
+        infoUser(winMain, DlgERR, "Error !", args)
+      else:
+        discard
+      while gtk2.events_pending() > 0:
+        discard gtk2.main_iteration()
     else:
-      discard
-
+      break
 
 proc createMainWin*(channelMain, channelDler:  ptr StringChannel) =
   var

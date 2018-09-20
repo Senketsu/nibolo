@@ -20,7 +20,7 @@ proc writeVersion() =
   echo("Copyright Senketsu (@Senketsu_Dev) [$1]" % LINK)
   var update = checkForUpdates()
   if update.available:
-    styledWriteLine(stdout, fgYellow, "\tNewer version of $1 available: $2" %  [NAME, update.version], resetStyle)
+    styledWriteLine(stdout, fgYellow, "\tNewer version of $1 available: $2" % [NAME, update.version], resetStyle)
   else:
     styledWriteLine(stdout, fgYellow, "\tYou are running newest version of $1: $2" % [NAME, update.version], resetStyle)
 

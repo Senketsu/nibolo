@@ -108,7 +108,7 @@ proc checkForUpdates*(): tuple[available: bool, version: string] =
 include profiles
 
 proc new*(chanDler, chanMain: ptr StringChannel): Ndl =
-  result = new(Ndl)
+  new(result)
   result.chan.dl = chanDler
   result.chan.main = chanMain
   result.chan.buffer = ""
