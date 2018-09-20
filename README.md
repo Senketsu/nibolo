@@ -12,6 +12,24 @@ A little old crappy tool revived because I don't value my time enough..
 * Manual mode - for the picky ones
 * Update check
 
+
+## Installation:
+------------------------
+**Windows**  
+* Download **Nibolo** from the [release](https://github.com/Senketsu/nibolo/releases) page.
+* If you don't have GTK installed, check the 'runtime' instalelr option.
+* Enjoy !
+
+**Linux**  
+* Compile
+* Link or copy to your path (e.g: /usr/local/bin/)
+* Enjoy ?
+
+**MAC**  
+* Send me old macbook
+* Stare down this page
+* ... hope ?
+
 ### Compiling:
 ------------------------
 Make sure you have the gtk2 wrappers installed by nimble:  
@@ -19,6 +37,7 @@ Make sure you have the gtk2 wrappers installed by nimble:
 Compile with:  
 `nim c --threads:on -d:ssl -d:release nibolo.nim`  
 On Windows you might want to add `--app:gui` to hide console.  
+Temporary workaround for bug in Nim causing segfault on exit, use `-d:nimNoAllocForSSL` compiler flag.
 
 ### Runtime depends:
 ------------------------
